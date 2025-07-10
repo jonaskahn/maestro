@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Kafka Producer Implementation
@@ -49,11 +49,7 @@ class KafkaProducer extends AbstractProducer {
   }
 
   async _connectToMessageBroker() {
-    this.#producer = await KafkaManager.createProducer(
-      null,
-      this.#clientOptions,
-      this.#producerOptions,
-    );
+    this.#producer = await KafkaManager.createProducer(null, this.#clientOptions, this.#producerOptions);
     await this.#producer.connect();
   }
 
@@ -62,10 +58,7 @@ class KafkaProducer extends AbstractProducer {
       await this.#producer.disconnect();
       this.#producer = null;
     }
-    logger.logConnectionEvent(
-      "KafkaProducer",
-      "disconnected from Kafka broker",
-    );
+    logger.logConnectionEvent("KafkaProducer", "disconnected from Kafka broker");
   }
 
   getMessageType() {
@@ -81,8 +74,9 @@ class KafkaProducer extends AbstractProducer {
   }
 
   /**
-   * @param items
-   * @return {{key: string, value: *, headers: {}|*, timestamp, partition: *}[]}
+   * Create Kafka formatted messages from input items
+   * @param {Array<Object>} items - Array of items to be converted to Kafka messages
+   * @returns {Array<Object>} Array of Kafka formatted messages with key, value, headers, timestamp and partition
    * @private
    */
   _createBrokerMessages(items) {
@@ -90,10 +84,10 @@ class KafkaProducer extends AbstractProducer {
   }
 
   /**
-   *
-   * @param messages
-   * @param _options
-   * @return {Promise<{sent: boolean, result: *, totalMessages, sentMessages, deduplicatedMessages: number}>}
+   * Send messages to Kafka broker
+   * @param {Array<Object>} messages - Array of formatted Kafka messages
+   * @param {Object} _options - Additional send options (unused in this implementation)
+   * @returns {Promise<Object>} Result object containing sent status, broker result, and message counts
    * @private
    */
   async _sendMessagesToBroker(messages, _options) {
@@ -120,29 +114,35 @@ class KafkaProducer extends AbstractProducer {
         deduplicatedMessages: 0,
       };
     } catch (error) {
-      logger.logError(
-        `Failed to send messages to topic '${this.#topic}'`,
-        error,
-      );
+      logger.logError(`Failed to send messages to topic '${this.#topic}'`, error);
       throw error;
     }
   }
 
+  /**
+   * Get configured send options for Kafka producer
+   * @returns {Object} Send options with acks, timeout, and compression settings
+   * @private
+   */
   #getSendOptions() {
     const baseSendOptions = {
       acks: this.#producerOptions.acks,
       timeout: this.#producerOptions.timeout,
     };
 
-    const compression = this.#getValidCompressionType(
-      this.#producerOptions.compression,
-    );
+    const compression = this.#getValidCompressionType(this.#producerOptions.compression);
     if (compression) {
       baseSendOptions.compression = compression;
     }
     return baseSendOptions;
   }
 
+  /**
+   * Validate and normalize compression type
+   * @param {string} compression - Compression type to validate
+   * @returns {string|undefined} Valid compression type or undefined if invalid
+   * @private
+   */
   #getValidCompressionType(compression) {
     if (!compression || compression === "none") {
       return undefined;
@@ -156,7 +156,7 @@ class KafkaProducer extends AbstractProducer {
     }
 
     logger.logWarning(
-      `Invalid compression type "${compression}", falling back to no compression. Valid types: ${validTypes.join(", ")}`,
+      `Invalid compression type "${compression}", falling back to no compression. Valid types: ${validTypes.join(", ")}`
     );
     return undefined;
   }

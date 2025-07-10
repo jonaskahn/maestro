@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Centralized Logging Service using Winston
@@ -111,10 +111,7 @@ class LoggerService {
    * @param {Object} additionalInfo - Additional concurrency metrics
    */
   logConcurrencyStatus(active, max, queued, additionalInfo = {}) {
-    this.logInfo(
-      `Concurrency Status: ${active}/${max} active, ${queued} queued`,
-      additionalInfo,
-    );
+    this.logInfo(`Concurrency Status: ${active}/${max} active, ${queued} queued`, additionalInfo);
   }
 
   /**
@@ -172,29 +169,20 @@ class LoggerService {
         timestamp,
         winston.format.colorize(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
-          const metaString = Object.keys(meta).length
-            ? ` ${JSON.stringify(meta)}`
-            : "";
+          const metaString = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
           return `${timestamp} [${level}]: ${message}${metaString}`;
-        }),
+        })
       ),
-      [LOG_FORMATS.JSON]: winston.format.combine(
-        timestamp,
-        winston.format.json(),
-      ),
+      [LOG_FORMATS.JSON]: winston.format.combine(timestamp, winston.format.json()),
       [LOG_FORMATS.DETAILED]: winston.format.combine(
         timestamp,
         winston.format.colorize(),
         winston.format.errors({ stack: true }),
-        winston.format.printf(
-          ({ timestamp, level, message, stack, ...meta }) => {
-            const metaString = Object.keys(meta).length
-              ? `\nMeta: ${JSON.stringify(meta, null, 2)}`
-              : "";
-            const stackString = stack ? `\nStack: ${stack}` : "";
-            return `${timestamp} [${level}]: ${message}${metaString}${stackString}`;
-          },
-        ),
+        winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
+          const metaString = Object.keys(meta).length ? `\nMeta: ${JSON.stringify(meta, null, 2)}` : "";
+          const stackString = stack ? `\nStack: ${stack}` : "";
+          return `${timestamp} [${level}]: ${message}${metaString}${stackString}`;
+        })
       ),
     };
 
@@ -221,10 +209,8 @@ module.exports = {
   logBatchOperation: loggerInstance.logBatchOperation.bind(loggerInstance),
   logTaskOperation: loggerInstance.logTaskOperation.bind(loggerInstance),
   logConnectionEvent: loggerInstance.logConnectionEvent.bind(loggerInstance),
-  logConcurrencyStatus:
-    loggerInstance.logConcurrencyStatus.bind(loggerInstance),
-  logProcessingStatistics:
-    loggerInstance.logProcessingStatistics.bind(loggerInstance),
+  logConcurrencyStatus: loggerInstance.logConcurrencyStatus.bind(loggerInstance),
+  logProcessingStatistics: loggerInstance.logProcessingStatistics.bind(loggerInstance),
   isDebugEnabled: loggerInstance.isDebugEnabled.bind(loggerInstance),
   isLevelEnabled: loggerInstance.isLevelEnabled.bind(loggerInstance),
   LoggerService,

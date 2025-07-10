@@ -76,7 +76,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: [ "CMD", "redis-cli", "--raw", "incr", "ping" ]
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
       interval: 30s
       timeout: 3s
       retries: 5
@@ -91,7 +91,7 @@ services:
     networks:
       - app-network
     healthcheck:
-      test: [ "CMD", "nc", "-z", "localhost", "11211" ]
+      test: ["CMD", "nc", "-z", "localhost", "11211"]
       interval: 30s
       timeout: 3s
       retries: 5

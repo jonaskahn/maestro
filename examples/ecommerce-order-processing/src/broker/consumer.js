@@ -127,9 +127,7 @@ class OrderConsumer extends DefaultConsumer {
   }
 
   simulateProcessingDelay() {
-    return new Promise((resolve) =>
-      setTimeout(resolve, SIMULATION_DELAYS.ORDER_VALIDATION),
-    );
+    return new Promise(resolve => setTimeout(resolve, SIMULATION_DELAYS.ORDER_VALIDATION));
   }
 
   createProcessingResult(order) {
@@ -158,8 +156,7 @@ class OrderConsumer extends DefaultConsumer {
   getStats() {
     const uptime = Date.now() - this.stats.startTime;
     const total = this.stats.processedCount + this.stats.failedCount;
-    const successRate =
-      total > 0 ? ((this.stats.processedCount / total) * 100).toFixed(2) : 0;
+    const successRate = total > 0 ? ((this.stats.processedCount / total) * 100).toFixed(2) : 0;
 
     return {
       processedCount: this.stats.processedCount,

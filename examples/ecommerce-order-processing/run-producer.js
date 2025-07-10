@@ -40,7 +40,7 @@ class ProducerCronjob {
       },
       {
         scheduled: false,
-      },
+      }
     );
 
     if (allowImmediateExecution) {
@@ -70,7 +70,7 @@ class ProducerCronjob {
   setupGracefulShutdown() {
     const signals = ["SIGTERM", "SIGINT", "SIGUSR2"];
 
-    signals.forEach((signal) => {
+    signals.forEach(signal => {
       process.on(signal, async () => {
         Logger.info(`Received ${signal}, shutting down gracefully`);
 
@@ -88,16 +88,8 @@ class ProducerCronjob {
     const cleanupTasks = [];
 
     if (this.producer) {
-      cleanupTasks.push(
-        this.producer
-          .disconnect()
-          .catch((err) => Logger.error("Producer cleanup error", err)),
-      );
-      cleanupTasks.push(
-        this.producer
-          .cleanup()
-          .catch((err) => Logger.error("Database cleanup error", err)),
-      );
+      cleanupTasks.push(this.producer.disconnect().catch(err => Logger.error("Producer cleanup error", err)));
+      cleanupTasks.push(this.producer.cleanup().catch(err => Logger.error("Database cleanup error", err)));
     }
 
     await Promise.allSettled(cleanupTasks);
@@ -115,7 +107,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((error) => {
+  main().catch(error => {
     Logger.error("Startup failed", error);
     process.exit(1);
   });

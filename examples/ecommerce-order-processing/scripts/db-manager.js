@@ -15,9 +15,7 @@ const Logger = require("../src/utils/logger");
 const readline = require("readline");
 
 const DB_CONFIG = {
-  url:
-    database.DB_CONFIG?.url ||
-    "mongodb://root:strongpassword@localhost:27017/myapp?authSource=admin",
+  url: database.DB_CONFIG?.url || "mongodb://root:strongpassword@localhost:27017/myapp?authSource=admin",
   dbName: database.DB_CONFIG?.dbName || "myapp",
   collections: database.DB_CONFIG?.collections || {
     orders: "orders",
@@ -188,14 +186,10 @@ async function clearAllData() {
         if (result.deletedCount > 0) {
           results[collectionName] = result.deletedCount;
           totalDeleted += result.deletedCount;
-          Logger.info(
-            `Deleted ${result.deletedCount} records from ${collectionName}`,
-          );
+          Logger.info(`Deleted ${result.deletedCount} records from ${collectionName}`);
         }
       } catch (error) {
-        Logger.warn(
-          `Error clearing collection ${collectionName}: ${error.message}`,
-        );
+        Logger.warn(`Error clearing collection ${collectionName}: ${error.message}`);
       }
     }
 
@@ -258,8 +252,7 @@ function confirmAction(actionType) {
       prompt = "Are you sure you want to CLEAR all database data? (yes/no): ";
       break;
     case "drop":
-      prompt =
-        "Are you sure you want to DROP all database collections? (yes/no): ";
+      prompt = "Are you sure you want to DROP all database collections? (yes/no): ";
       break;
     case "reset":
       prompt = "Are you sure you want to RESET the database? (yes/no): ";
@@ -268,8 +261,8 @@ function confirmAction(actionType) {
       prompt = `Are you sure you want to perform '${actionType}'? (yes/no): `;
   }
 
-  return new Promise((resolve) => {
-    rl.question(prompt, (answer) => {
+  return new Promise(resolve => {
+    rl.question(prompt, answer => {
       rl.close();
       if (answer.toLowerCase() === "yes") {
         Logger.info(`Proceeding with database ${actionType}`);
@@ -362,15 +355,11 @@ async function handleCommand(command, args) {
 function showHelp() {
   Logger.info("Database Manager - Available commands:");
   Logger.info("  init             - Initialize database schema and indexes");
-  Logger.info(
-    "  init-with-data N - Initialize database and generate N test orders (default: 50)",
-  );
+  Logger.info("  init-with-data N - Initialize database and generate N test orders (default: 50)");
   Logger.info("  generate N       - Generate N test orders (default: 10)");
   Logger.info("  stats            - Show database statistics");
   Logger.info("  cleanup          - Clean up old orders");
-  Logger.info(
-    "  reset            - Reset database (clear and recreate schema)",
-  );
+  Logger.info("  reset            - Reset database (clear and recreate schema)");
   Logger.info("  clear            - Clear all data but keep collections");
   Logger.info("  drop             - Drop all collections");
   Logger.info("");

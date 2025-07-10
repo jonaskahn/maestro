@@ -93,11 +93,7 @@ class OrderProducer extends DefaultProducer {
         await database.connect();
       }
 
-      const orders = await database.getPendingOrders(
-        criteria,
-        limit,
-        excludedIds,
-      );
+      const orders = await database.getPendingOrders(criteria, limit, excludedIds);
       return orders || [];
     } catch (error) {
       Logger.error("Failed to get pending orders", error);
@@ -119,11 +115,7 @@ class OrderProducer extends DefaultProducer {
       },
     };
 
-    const pendingOrders = await this.getPendingOrders(
-      pendingOrdersCriteria,
-      limit,
-      excludedIds,
-    );
+    const pendingOrders = await this.getPendingOrders(pendingOrdersCriteria, limit, excludedIds);
 
     if (pendingOrders.length === 0) {
       return [];
@@ -147,7 +139,7 @@ class OrderProducer extends DefaultProducer {
             sentAt: new Date(),
             updatedAt: new Date(),
           },
-        },
+        }
       );
 
       this.processedCount++;
@@ -186,10 +178,7 @@ class OrderProducer extends DefaultProducer {
    */
   getStats() {
     const totalAttempted = this.processedCount + this.failedCount;
-    const successRate =
-      totalAttempted > 0
-        ? ((this.processedCount / totalAttempted) * 100).toFixed(1)
-        : "0.0";
+    const successRate = totalAttempted > 0 ? ((this.processedCount / totalAttempted) * 100).toFixed(1) : "0.0";
 
     return {
       processedCount: this.processedCount,

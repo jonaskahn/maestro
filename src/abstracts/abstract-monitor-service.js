@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Abstract Backpressure Monitor for intelligent rate limiting and consumer lag monitoring
@@ -58,37 +58,22 @@ class AbstractMonitorService {
     }
 
     this.config = {
-      maxLag:
-        config.maxLag ||
-        this.getEnvironmentValueOrDefault(
-          ENV_KEYS.MAX_LAG,
-          DEFAULT_VALUES.MAX_LAG_THRESHOLD,
-        ),
+      maxLag: config.maxLag || this.getEnvironmentValueOrDefault(ENV_KEYS.MAX_LAG, DEFAULT_VALUES.MAX_LAG_THRESHOLD),
       enabledResourceLag:
         config.enabledResourceLag ||
-        this.getEnvironmentValueOrDefault(
-          ENV_KEYS.ENABLED_RESOURCE_LAG,
-          DEFAULT_VALUES.ENABLED_RESOURCE_LAG,
-        ),
-      checkInterval:
-        config.checkInterval || BackpressureMonitorConfig.checkInterval,
-      rateLimitThreshold:
-        config.rateLimitThreshold || DEFAULT_VALUES.RATE_LIMIT_THRESHOLD,
+        this.getEnvironmentValueOrDefault(ENV_KEYS.ENABLED_RESOURCE_LAG, DEFAULT_VALUES.ENABLED_RESOURCE_LAG),
+      checkInterval: config.checkInterval || BackpressureMonitorConfig.checkInterval,
+      rateLimitThreshold: config.rateLimitThreshold || DEFAULT_VALUES.RATE_LIMIT_THRESHOLD,
       cacheTTL: config.cacheTTL || BackpressureMonitorConfig.cacheTTL,
-      initialDelay:
-        config.initialDelay || TtlConfig.getAllTTLValues().BACKOFF_MIN_DELAY,
-      maxDelay:
-        config.maxDelay || TtlConfig.getAllTTLValues().BACKOFF_MAX_DELAY,
-      exponentialFactor:
-        config.exponentialFactor || DEFAULT_VALUES.EXPONENTIAL_FACTOR,
+      initialDelay: config.initialDelay || TtlConfig.getAllTTLValues().BACKOFF_MIN_DELAY,
+      maxDelay: config.maxDelay || TtlConfig.getAllTTLValues().BACKOFF_MAX_DELAY,
+      exponentialFactor: config.exponentialFactor || DEFAULT_VALUES.EXPONENTIAL_FACTOR,
     };
 
     this.isMonitoring = MONITORING_STATES.DISABLED;
     this.monitoringInterval = null;
 
-    logger.logInfo(
-      `ℹ️ Backpressure monitor configured for ${this.getBrokerType()}`,
-    );
+    logger.logInfo(`ℹ️ Backpressure monitor configured for ${this.getBrokerType()}`);
     logger.logDebug("ℹ️ Backpressure monitor configuration", {
       maxLag: this.config.maxLag,
       checkInterval: this.config.checkInterval,
@@ -130,9 +115,7 @@ class AbstractMonitorService {
    */
   startMonitoring() {
     if (this.isMonitoring === MONITORING_STATES.ENABLED) {
-      logger.logWarning(
-        `Backpressure monitor for ${this.getBrokerType()} is already active`,
-      );
+      logger.logWarning(`Backpressure monitor for ${this.getBrokerType()} is already active`);
       return Promise.resolve();
     }
 
@@ -142,15 +125,10 @@ class AbstractMonitorService {
       }, this.config.checkInterval);
 
       this.isMonitoring = MONITORING_STATES.ENABLED;
-      logger.logInfo(
-        `⚡ Backpressure monitoring started for ${this.getBrokerType()}`,
-      );
+      logger.logInfo(`⚡ Backpressure monitoring started for ${this.getBrokerType()}`);
       return Promise.resolve();
     } catch (error) {
-      logger.logError(
-        `Failed to start backpressure monitoring for ${this.getBrokerType()}`,
-        error,
-      );
+      logger.logError(`Failed to start backpressure monitoring for ${this.getBrokerType()}`, error);
       throw error;
     }
   }
@@ -166,7 +144,7 @@ class AbstractMonitorService {
       if (backpressureLevel !== BACKPRESSURE_LEVELS.NONE) {
         logger.logWarning(
           `⚡ Backpressure detected (${backpressureLevel}): lag=${metrics.totalLag}, ` +
-            `memory=${metrics.memoryUsage}%, cpu=${metrics.cpuUsage}%`,
+            `memory=${metrics.memoryUsage}%, cpu=${metrics.cpuUsage}%`
         );
       }
     } catch (error) {
@@ -214,23 +192,31 @@ class AbstractMonitorService {
   }
 
   /**
-   * Get consumer lag metrics (must be implemented by subclasses)
-   * @returns {Promise<Object>} Lag metrics
+   * Gets consumer lag metrics from the message broker
+   * @returns {Promise<Object>} Lag metrics object with totalLag, maxPartitionLag, avgLag, and lagThreshold
+   * @throws {Error} When method is not implemented by subclass
    */
   async getConsumerLag() {
     throw new Error("getConsumerLag method must be implemented by subclass");
   }
 
   /**
-   * Get system resource metrics (must be implemented by subclasses)
-   * @returns {Promise<Object>} Resource metrics
+   * Gets system resource metrics like CPU and memory usage
+   * @returns {Promise<Object>} Resource metrics with cpuUsage and memoryUsage percentages
+   * @throws {Error} When method is not implemented by subclass
    */
   async getResourceMetrics() {
-    throw new Error(
-      "getResourceMetrics method must be implemented by subclass",
-    );
+    throw new Error("getResourceMetrics method must be implemented by subclass");
   }
 
+  /**
+   * Calculates the current backpressure level based on metrics
+   * @param {Object} metrics - Collected metrics object
+   * @param {number} metrics.totalLag - Total message lag across all partitions
+   * @param {number} metrics.cpuUsage - Current CPU usage percentage
+   * @param {number} metrics.memoryUsage - Current memory usage percentage
+   * @returns {string} Backpressure level from BACKPRESSURE_LEVELS enum
+   */
   calculateBackpressureLevel(metrics) {
     const lagLevel = this.getLagBackpressureLevel(metrics);
     const resourceLevel = this.config.enabledResourceLag
@@ -240,7 +226,17 @@ class AbstractMonitorService {
     return this.getHighestBackpressureLevel(lagLevel, resourceLevel);
   }
 
+  /**
+   * Determines backpressure level based on consumer lag
+   * @param {Object} metrics - Metrics object with lag information
+   * @param {number} metrics.totalLag - Total consumer lag across all partitions
+   * @param {number} metrics.lagThreshold - Maximum acceptable lag threshold
+   * @returns {string} Lag-based backpressure level from BACKPRESSURE_LEVELS enum
+   */
   getLagBackpressureLevel(metrics) {
+    if (!metrics || !metrics.totalLag) {
+      return BACKPRESSURE_LEVELS.NONE;
+    }
     const lagRatio = metrics.totalLag / this.config.maxLag;
 
     if (lagRatio > 1.0) return BACKPRESSURE_LEVELS.CRITICAL;
@@ -251,11 +247,18 @@ class AbstractMonitorService {
     return BACKPRESSURE_LEVELS.NONE;
   }
 
+  /**
+   * Determines backpressure level based on system resource usage
+   * @param {Object} metrics - Metrics object with resource information
+   * @param {number} metrics.cpuUsage - Current CPU usage percentage (0-100)
+   * @param {number} metrics.memoryUsage - Current memory usage percentage (0-100)
+   * @returns {string} Resource-based backpressure level from BACKPRESSURE_LEVELS enum
+   */
   getResourceBackpressureLevel(metrics) {
-    const maxResourceUsage = Math.max(
-      metrics.memoryUsage || 0,
-      metrics.cpuUsage || 0,
-    );
+    if (!this.config.enabledResourceLag || !metrics) {
+      return BACKPRESSURE_LEVELS.NONE;
+    }
+    const maxResourceUsage = Math.max(metrics.memoryUsage || 0, metrics.cpuUsage || 0);
 
     if (maxResourceUsage > 90) return BACKPRESSURE_LEVELS.CRITICAL;
     if (maxResourceUsage > 80) return BACKPRESSURE_LEVELS.HIGH;
@@ -265,6 +268,12 @@ class AbstractMonitorService {
     return BACKPRESSURE_LEVELS.NONE;
   }
 
+  /**
+   * Determines the highest backpressure level between two levels
+   * @param {string} level1 - First backpressure level from BACKPRESSURE_LEVELS enum
+   * @param {string} level2 - Second backpressure level from BACKPRESSURE_LEVELS enum
+   * @returns {string} Highest backpressure level from BACKPRESSURE_LEVELS enum
+   */
   getHighestBackpressureLevel(level1, level2) {
     const levelOrder = [
       BACKPRESSURE_LEVELS.NONE,
@@ -287,9 +296,7 @@ class AbstractMonitorService {
    */
   async stopMonitoring() {
     if (this.isMonitoring !== MONITORING_STATES.ENABLED) {
-      logger.logWarning(
-        `Backpressure monitor for ${this.getBrokerType()} is not active`,
-      );
+      logger.logWarning(`Backpressure monitor for ${this.getBrokerType()} is not active`);
       return await Promise.resolve();
     }
 
@@ -303,30 +310,23 @@ class AbstractMonitorService {
       this.lastMetricsTime = null;
       this.isMonitoring = MONITORING_STATES.DISABLED;
 
-      logger.logInfo(
-        `⚡ Backpressure monitoring stopped for ${this.getBrokerType()}`,
-      );
+      logger.logInfo(`⚡ Backpressure monitoring stopped for ${this.getBrokerType()}`);
     } catch (error) {
-      logger.logError(
-        `Error stopping backpressure monitoring for ${this.getBrokerType()}`,
-        error,
-      );
+      logger.logError(`Error stopping backpressure monitoring for ${this.getBrokerType()}`, error);
       throw error;
     }
   }
 
   /**
-   * Returns the current backpressure status and metrics
-   * @returns {Promise<Object>} Status object with backpressure level and metrics
-   * @throws {Error} When status collection fails
+   * Gets current backpressure monitoring status
+   * @returns {Promise<Object>} Status object with monitoring state, metrics, and configuration
    */
   async getBackpressureStatus() {
     try {
       const metrics = await this.collectCurrentMetrics();
       const backpressureLevel = this.calculateBackpressureLevel(metrics);
       const shouldPause =
-        backpressureLevel === BACKPRESSURE_LEVELS.CRITICAL ||
-        backpressureLevel === BACKPRESSURE_LEVELS.HIGH;
+        backpressureLevel === BACKPRESSURE_LEVELS.CRITICAL || backpressureLevel === BACKPRESSURE_LEVELS.HIGH;
 
       const delayMultipliers = {
         [BACKPRESSURE_LEVELS.NONE]: 0,
@@ -337,10 +337,7 @@ class AbstractMonitorService {
       };
 
       const multiplier = delayMultipliers[backpressureLevel] || 0;
-      const delay = Math.min(
-        this.config.initialDelay * multiplier,
-        this.config.maxDelay,
-      );
+      const delay = Math.min(this.config.initialDelay * multiplier, this.config.maxDelay);
 
       return {
         backpressureLevel,

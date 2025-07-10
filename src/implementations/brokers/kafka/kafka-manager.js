@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Kafka Manager
@@ -46,17 +46,13 @@ class KafkaManager {
    */
   static get CLIENT_DEFAULTS() {
     return {
-      clientId:
-        process.env.JO_KAFKA_CLIENT_ID ||
-        `job-orchestrator-${new Date().getTime()}`,
+      clientId: process.env.JO_KAFKA_CLIENT_ID || `job-orchestrator-${new Date().getTime()}`,
       brokers: process.env.JO_KAFKA_BROKERS?.split(",") || ["localhost:9092"],
       connectionTimeout: KAFKA_TTL_CONFIG.connectionTimeout,
       requestTimeout: KAFKA_TTL_CONFIG.requestTimeout,
-      enforceRequestTimeout:
-        process.env.JO_KAFKA_ENFORCE_REQUEST_TIMEOUT !== "false",
+      enforceRequestTimeout: process.env.JO_KAFKA_ENFORCE_REQUEST_TIMEOUT !== "false",
       retry: {
-        initialRetryTime:
-          parseInt(process.env.JO_KAFKA_INITIAL_RETRY_TIME_MS) || 100,
+        initialRetryTime: parseInt(process.env.JO_KAFKA_INITIAL_RETRY_TIME_MS) || 100,
         retries: parseInt(process.env.JO_KAFKA_RETRY_COUNT) || 10,
         factor: 0.2,
         multiplier: 2,
@@ -72,31 +68,21 @@ class KafkaManager {
     const ttlValues = TTLConfig.getAllTTLValues();
 
     return {
-      sessionTimeout:
-        parseInt(process.env.JO_KAFKA_CONSUMER_SESSION_TIMEOUT) ||
-        ttlValues.TASK_PROCESSING_STATE_TTL,
+      sessionTimeout: parseInt(process.env.JO_KAFKA_CONSUMER_SESSION_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL,
       rebalanceTimeout:
-        parseInt(process.env.JO_KAFKA_CONSUMER_REBALANCE_TIMEOUT) ||
-        ttlValues.TASK_PROCESSING_STATE_TTL * 2,
+        parseInt(process.env.JO_KAFKA_CONSUMER_REBALANCE_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL * 2,
       heartbeatInterval:
-        parseInt(process.env.JO_KAFKA_CONSUMER_HEARTBEAT_INTERVAL) ||
-        ttlValues.TASK_PROCESSING_STATE_TTL / 10,
-      maxBytesPerPartition:
-        parseInt(process.env.JO_KAFKA_CONSUMER_MAX_BYTES_PER_PARTITION) ||
-        1048576,
+        parseInt(process.env.JO_KAFKA_CONSUMER_HEARTBEAT_INTERVAL) || ttlValues.TASK_PROCESSING_STATE_TTL / 10,
+      maxBytesPerPartition: parseInt(process.env.JO_KAFKA_CONSUMER_MAX_BYTES_PER_PARTITION) || 1048576,
       minBytes: parseInt(process.env.JO_KAFKA_CONSUMER_MIN_BYTES) || 1,
       maxBytes: parseInt(process.env.JO_KAFKA_CONSUMER_MAX_BYTES) || 10485760,
       maxWaitTimeInMs:
-        parseInt(process.env.JO_KAFKA_CONSUMER_MAX_WAIT_TIME_MS) ||
-        KAFKA_TTL_CONFIG.connectionTimeout * 5,
-      allowAutoTopicCreation:
-        process.env.JO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
+        parseInt(process.env.JO_KAFKA_CONSUMER_MAX_WAIT_TIME_MS) || KAFKA_TTL_CONFIG.connectionTimeout * 5,
+      allowAutoTopicCreation: process.env.JO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
       autoCommit: process.env.JO_KAFKA_CONSUMER_AUTO_COMMIT === "true",
-      autoCommitInterval:
-        parseInt(process.env.JO_KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL) || 5000,
+      autoCommitInterval: parseInt(process.env.JO_KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL) || 5000,
       fromBeginning: process.env.JO_KAFKA_CONSUMER_FROM_BEGINNING !== "false",
-      maxInFlightRequests:
-        parseInt(process.env.JO_KAFKA_CONSUMER_MAX_IN_FLIGHT_REQUESTS) || 1,
+      maxInFlightRequests: parseInt(process.env.JO_KAFKA_CONSUMER_MAX_IN_FLIGHT_REQUESTS) || 1,
     };
   }
 
@@ -107,21 +93,13 @@ class KafkaManager {
     return {
       createPartitioner: Partitioners.LegacyPartitioner,
       acks: parseInt(process.env.JO_KAFKA_PRODUCER_ACKS) || -1,
-      timeout:
-        parseInt(process.env.JO_KAFKA_PRODUCER_TIMEOUT) ||
-        KAFKA_TTL_CONFIG.requestTimeout,
-      compression:
-        KafkaManager.getCompressionType(
-          process.env.JO_KAFKA_COMPRESSION_TYPE,
-        ) || CompressionTypes.None,
+      timeout: parseInt(process.env.JO_KAFKA_PRODUCER_TIMEOUT) || KAFKA_TTL_CONFIG.requestTimeout,
+      compression: KafkaManager.getCompressionType(process.env.JO_KAFKA_COMPRESSION_TYPE) || CompressionTypes.None,
       idempotent: process.env.JO_KAFKA_PRODUCER_IDEMPOTENT === "true",
-      maxInFlightRequests:
-        parseInt(process.env.JO_KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS) || 5,
-      allowAutoTopicCreation:
-        process.env.JO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
+      maxInFlightRequests: parseInt(process.env.JO_KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS) || 5,
+      allowAutoTopicCreation: process.env.JO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
       transactionTimeout:
-        parseInt(process.env.JO_KAFKA_PRODUCER_TRANSACTION_TIMEOUT) ||
-        KAFKA_TTL_CONFIG.requestTimeout * 2,
+        parseInt(process.env.JO_KAFKA_PRODUCER_TRANSACTION_TIMEOUT) || KAFKA_TTL_CONFIG.requestTimeout * 2,
       retries: parseInt(process.env.JO_KAFKA_PRODUCER_RETRIES) || 10,
       retry: {
         initialRetryTime: 300,
@@ -147,12 +125,12 @@ class KafkaManager {
   static createClient(clientOptions = {}) {
     if (!clientOptions.brokers) {
       throw new Error(
-        `Kafka client options must include 'brokers' array. Received: ${JSON.stringify(clientOptions)}. Example: { brokers: ['localhost:9092'] }`,
+        `Kafka client options must include 'brokers' array. Received: ${JSON.stringify(clientOptions)}. Example: { brokers: ['localhost:9092'] }`
       );
     }
     const client = new Kafka(clientOptions);
     logger.logDebug(
-      `📡 Kafka client created: ${clientOptions.clientId || "unknown"} connecting to ${clientOptions.brokers.join(", ")}`,
+      `📡 Kafka client created: ${clientOptions.clientId || "unknown"} connecting to ${clientOptions.brokers.join(", ")}`
     );
     return client;
   }
@@ -165,9 +143,7 @@ class KafkaManager {
    */
   static createAdmin(client, clientOptions) {
     if (!client && !clientOptions) {
-      throw new Error(
-        `‼️ Can not create admin due no client or clientOptions defined yet.`,
-      );
+      throw new Error(`‼️ Can not create admin due no client or clientOptions defined yet.`);
     }
     const kafkaClient = client ?? this.createClient(clientOptions);
     return kafkaClient.admin();
@@ -182,9 +158,7 @@ class KafkaManager {
    */
   static createProducer(client, clientOptions, producerOptions) {
     if (!client && !clientOptions) {
-      throw new Error(
-        `‼️ Can not create producer due no client or clientOptions defined yet.`,
-      );
+      throw new Error(`‼️ Can not create producer due no client or clientOptions defined yet.`);
     }
     const kafkaClient = client ?? KafkaManager.createClient(clientOptions);
     return kafkaClient.producer(producerOptions);
@@ -199,9 +173,7 @@ class KafkaManager {
    */
   static createConsumer(client, clientOptions, consumerOptions) {
     if (!client && !clientOptions) {
-      throw new Error(
-        `‼️ Can not create consumer due no client or clientOptions defined yet.`,
-      );
+      throw new Error(`‼️ Can not create consumer due no client or clientOptions defined yet.`);
     }
     const kafkaClient = client ?? KafkaManager.createClient(clientOptions);
     return kafkaClient.consumer(consumerOptions);
@@ -239,12 +211,9 @@ class KafkaManager {
    */
   static enrichConfig(config) {
     config.brokerOptions = config.brokerOptions || {};
-    config.brokerOptions.clientOptions =
-      config.brokerOptions.clientOptions || {};
-    config.brokerOptions.consumerOptions =
-      config.brokerOptions.consumerOptions || {};
-    config.brokerOptions.producerOptions =
-      config.brokerOptions.producerOptions || {};
+    config.brokerOptions.clientOptions = config.brokerOptions.clientOptions || {};
+    config.brokerOptions.consumerOptions = config.brokerOptions.consumerOptions || {};
+    config.brokerOptions.producerOptions = config.brokerOptions.producerOptions || {};
 
     if (!config.groupId && config.topic) {
       config.groupId = `${config.topic}-consumer-group-processors`;
@@ -259,16 +228,21 @@ class KafkaManager {
   /**
    * Merge Kafka configuration with smart defaults
    * @param {Object} userConfig - User provided configuration
+   * @param {string} userConfig.topic - The Kafka topic name
+   * @param {string} [userConfig.groupId] - The consumer group ID (required for consumers)
+   * @param {Object} [userConfig.brokerOptions] - Broker configuration options
+   * @param {Object} [userConfig.brokerOptions.clientOptions] - Kafka client connection options
+   * @param {Object} [userConfig.brokerOptions.producerOptions] - Producer-specific options
+   * @param {Object} [userConfig.brokerOptions.consumerOptions] - Consumer-specific options
+   * @param {boolean} [userConfig.useSuppression] - Whether to use message suppression
+   * @param {boolean} [userConfig.useDistributedLock] - Whether to use distributed lock
+   * @param {Object} [userConfig.cacheOptions] - Cache configuration options
    * @param {string} type - Component type ('consumer' or 'producer')
-   * @returns {Object} Merged configuration with client and component options
+   * @returns {Object} Standardized configuration with all required options
    */
   static standardizeConfig(userConfig = {}, type) {
     const { brokerOptions = {} } = userConfig;
-    const {
-      clientOptions = {},
-      consumerOptions = {},
-      producerOptions = {},
-    } = brokerOptions;
+    const { clientOptions = {}, consumerOptions = {}, producerOptions = {} } = brokerOptions;
 
     const mergedClientOptions = {
       ...this.CLIENT_DEFAULTS,
@@ -279,9 +253,7 @@ class KafkaManager {
       },
     };
 
-    mergedClientOptions.clientId =
-      clientOptions.clientId ??
-      `${userConfig.topic}-client-${new Date().getTime()}`;
+    mergedClientOptions.clientId = clientOptions.clientId ?? `${userConfig.topic}-client-${new Date().getTime()}`;
     if (clientOptions.ssl !== undefined) {
       mergedClientOptions.ssl = clientOptions.ssl;
     }
@@ -289,10 +261,7 @@ class KafkaManager {
       mergedClientOptions.sasl = clientOptions.sasl;
     }
 
-    userConfig.groupId =
-      consumerOptions.groupId ??
-      userConfig.groupId ??
-      `${userConfig.topic}-processors`;
+    userConfig.groupId = consumerOptions.groupId ?? userConfig.groupId ?? `${userConfig.topic}-processors`;
     const standardizeConfig = {
       topic: userConfig.topic,
       groupId: userConfig.groupId,
@@ -302,9 +271,7 @@ class KafkaManager {
 
     if (type === "consumer") {
       standardizeConfig.maxConcurrency =
-        userConfig.maxConcurrency ||
-        parseInt(process.env.JO_MAX_CONCURRENT_MESSAGES) ||
-        1;
+        userConfig.maxConcurrency || parseInt(process.env.JO_MAX_CONCURRENT_MESSAGES) || 1;
       standardizeConfig.consumerOptions = {
         groupId: userConfig.groupId,
         ...this.CONSUMER_DEFAULTS,
@@ -319,8 +286,7 @@ class KafkaManager {
       };
       standardizeConfig.maxLag = userConfig.maxLag;
       standardizeConfig.useSuppression = userConfig.useSuppression !== "false";
-      standardizeConfig.useDistributedLock =
-        userConfig.useDistributedLock !== "false";
+      standardizeConfig.useDistributedLock = userConfig.useDistributedLock !== "false";
     }
 
     return standardizeConfig;
@@ -346,10 +312,7 @@ class KafkaManager {
       logger.logDebug("☑️ Success parse message content from Kafka Broker");
       return result;
     } catch (error) {
-      logger.logWarning(
-        "⚠️ Failed to message content from Kafka Broker",
-        error.message,
-      );
+      logger.logWarning("⚠️ Failed to message content from Kafka Broker", error.message);
       return messageValue.toString();
     }
   }
@@ -378,9 +341,7 @@ class KafkaManager {
     const bufferedHeaders = {};
     for (const [key, value] of Object.entries(headers)) {
       if (value !== null && value !== undefined) {
-        bufferedHeaders[key] = Buffer.isBuffer(value)
-          ? value
-          : Buffer.from(String(value));
+        bufferedHeaders[key] = Buffer.isBuffer(value) ? value : Buffer.from(String(value));
       }
     }
 
@@ -410,9 +371,7 @@ class KafkaManager {
    */
   static async calculateConsumerLag(consumerGroup, topic, admin = null) {
     if (!consumerGroup || !topic || !admin) {
-      logger.logWarning(
-        "Consumer group or topic not specified for lag calculation",
-      );
+      logger.logWarning("Consumer group or topic not specified for lag calculation");
       return 0;
     }
     try {
@@ -430,16 +389,11 @@ class KafkaManager {
         totalLag += partitionLag;
       }
 
-      logger.logDebug(
-        `📊 Consumer lag for group '${consumerGroup}' on topic '${topic}': ${totalLag}`,
-      );
+      logger.logDebug(`📊 Consumer lag for group '${consumerGroup}' on topic '${topic}': ${totalLag}`);
 
       return totalLag;
     } catch (error) {
-      logger.logError(
-        `Failed to calculate consumer lag for group '${consumerGroup}' on topic '${topic}'`,
-        error,
-      );
+      logger.logError(`Failed to calculate consumer lag for group '${consumerGroup}' on topic '${topic}'`, error);
       return 0;
     }
   }
@@ -455,16 +409,13 @@ class KafkaManager {
       const topicOffsets = await admin.fetchTopicOffsets(topic);
       const offsetMap = {};
 
-      topicOffsets.forEach((partitionInfo) => {
+      topicOffsets.forEach(partitionInfo => {
         offsetMap[partitionInfo.partition] = partitionInfo.high;
       });
 
       return offsetMap;
     } catch (error) {
-      logger.logError(
-        `Failed to fetch latest offsets for topic '${topic}'`,
-        error,
-      );
+      logger.logError(`Failed to fetch latest offsets for topic '${topic}'`, error);
       return {};
     }
   }
@@ -485,9 +436,9 @@ class KafkaManager {
 
       const offsetMap = {};
 
-      groupOffsets.forEach((topicInfo) => {
+      groupOffsets.forEach(topicInfo => {
         if (topicInfo.topic === topic) {
-          topicInfo.partitions.forEach((partitionInfo) => {
+          topicInfo.partitions.forEach(partitionInfo => {
             offsetMap[partitionInfo.partition] = partitionInfo.offset;
           });
         }
@@ -495,29 +446,25 @@ class KafkaManager {
 
       return offsetMap;
     } catch (error) {
-      if (
-        error.message?.includes("GroupIdNotFound") ||
-        error.type === "GROUP_ID_NOT_FOUND"
-      ) {
-        logger.logDebug(
-          `Consumer group '${consumerGroup}' not found, assuming no committed offsets`,
-        );
+      if (error.message?.includes("GroupIdNotFound") || error.type === "GROUP_ID_NOT_FOUND") {
+        logger.logDebug(`Consumer group '${consumerGroup}' not found, assuming no committed offsets`);
         return {};
       }
-      logger.logError(
-        `Failed to fetch committed offsets for group '${consumerGroup}' on topic '${topic}'`,
-        error,
-      );
+      logger.logError(`Failed to fetch committed offsets for group '${consumerGroup}' on topic '${topic}'`, error);
       return {};
     }
   }
 
   /**
-   * Creates multiple messages in a single batch
-   * @param {Array<Object>} items - Array of message payloads
-   * @param {string} type - Kafka type
-   * @param {Object} options - Message options
-   * @returns {Object} Batched Kafka message object
+   * Creates multiple Kafka-formatted messages from input items
+   * @param {Array<Object>} items - Array of message payloads/items to be converted
+   * @param {string} type - Topic or message type identifier
+   * @param {Object} [options={}] - Message creation options
+   * @param {string|Function} [options.key] - Custom key or key generation function
+   * @param {Object} [options.headers] - Custom headers to include in the message
+   * @param {string} [options.timestamp] - Custom timestamp for the message
+   * @param {number} [options.partition] - Specific partition to send the message to
+   * @returns {Array<Object>} Array of Kafka formatted messages with key, value, headers, timestamp and partition
    */
   static createMessages(items, type, options = {}) {
     if (!Array.isArray(items) || items.length === 0) {
@@ -528,11 +475,10 @@ class KafkaManager {
       throw new Error("Batch message requires a type");
     }
 
-    return items.map((item) => {
+    return items.map(item => {
       let serializedValue;
       try {
-        serializedValue =
-          typeof item === "object" ? JSON.stringify(item) : String(item);
+        serializedValue = typeof item === "object" ? JSON.stringify(item) : String(item);
       } catch (error) {
         logger.logWarning(`Failed to stringify message: ${error.message}`);
         serializedValue = String(item);

@@ -2,8 +2,14 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
+ *
+ * @module implementations/brokers/kafka
+ * @exports {Class} KafkaConsumer - Kafka implementation of message consumer
+ * @exports {Class} KafkaProducer - Kafka implementation of message producer
+ * @exports {Class} KafkaMonitorService - Backpressure monitoring for Kafka
+ * @exports {Object} KafkaManager - Utility for Kafka client management and operations
  */
 
 const KafkaConsumer = require("./kafka-consumer");

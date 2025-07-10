@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Cache Factory for creating cache layer implementations
@@ -33,9 +33,7 @@ class CacheClientFactory {
         case "redis":
           return this._createRedisClient(config);
         default:
-          logger.logWarning(
-            `Unsupported cache implementation: ${implementation}. Falling back to Redis.`,
-          );
+          logger.logWarning(`Unsupported cache implementation: ${implementation}. Falling back to Redis.`);
           return this._createRedisClient({
             ...config,
             implementation: "redis",
@@ -54,7 +52,7 @@ class CacheClientFactory {
         } catch (fallbackError) {
           logger.logError("Redis fallback also failed", fallbackError);
           throw new Error(
-            `Cache client creation failed: ${error.message}. Fallback to Redis also failed: ${fallbackError.message}`,
+            `Cache client creation failed: ${error.message}. Fallback to Redis also failed: ${fallbackError.message}`
           );
         }
       }
@@ -70,9 +68,7 @@ class CacheClientFactory {
    * @private
    */
   static _resolveImplementation(config) {
-    return (
-      config.implementation || process.env.JO_CACHE_IMPLEMENTATION || "redis"
-    );
+    return config.implementation || process.env.JO_CACHE_IMPLEMENTATION || "redis";
   }
 
   /**
@@ -111,9 +107,7 @@ class CacheClientFactory {
       });
     } catch (error) {
       logger.logError("Failed to create Memcached cache client", error);
-      throw new Error(
-        `Memcached cache client creation failed: ${error.message}`,
-      );
+      throw new Error(`Memcached cache client creation failed: ${error.message}`);
     }
   }
 
@@ -128,7 +122,7 @@ class CacheClientFactory {
 
     try {
       logger.logWarning(
-        "Memory cache is for development/testing only. Not suitable for production multi-instance deployments.",
+        "Memory cache is for development/testing only. Not suitable for production multi-instance deployments."
       );
 
       return new MemoryCacheClient({
@@ -165,7 +159,7 @@ class CacheClientFactory {
     if (!supportedImplementations.includes(implementation.toLowerCase())) {
       logger.logWarning(
         `Unsupported cache implementation: ${implementation}. ` +
-          `Supported implementations: ${supportedImplementations.join(", ")}`,
+          `Supported implementations: ${supportedImplementations.join(", ")}`
       );
     }
 
@@ -177,10 +171,7 @@ class CacheClientFactory {
       this._validateTtl(config.sentTtl, "sentTtl");
     }
 
-    if (
-      config.connectionOptions &&
-      typeof config.connectionOptions !== "object"
-    ) {
+    if (config.connectionOptions && typeof config.connectionOptions !== "object") {
       throw new Error("Cache connectionOptions must be an object");
     }
   }
@@ -193,14 +184,12 @@ class CacheClientFactory {
    */
   static _validateTtl(ttl, fieldName) {
     if (typeof ttl !== "number" || ttl <= 0 || !Number.isInteger(ttl)) {
-      throw new Error(
-        `Cache ${fieldName} must be a positive integer (milliseconds)`,
-      );
+      throw new Error(`Cache ${fieldName} must be a positive integer (milliseconds)`);
     }
 
     if (ttl > 86400 * 30 * 1000) {
       logger.logWarning(
-        `Cache ${fieldName} is quite high (${ttl} milliseconds = ${Math.round(ttl / (86400 * 1000))} days). Consider if this is intentional.`,
+        `Cache ${fieldName} is quite high (${ttl} milliseconds = ${Math.round(ttl / (86400 * 1000))} days). Consider if this is intentional.`
       );
     }
   }
@@ -223,9 +212,7 @@ class CacheClientFactory {
       return false;
     }
 
-    return this.getSupportedImplementations().includes(
-      implementation.toLowerCase(),
-    );
+    return this.getSupportedImplementations().includes(implementation.toLowerCase());
   }
 
   /**

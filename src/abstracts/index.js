@@ -2,12 +2,16 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Central export file for all abstract base classes. Importing from
- * '@/abstracts' will give you convenient access to the core abstractions
- * used throughout the Maestro code-base.
+ * Central export file for all abstract base classes.
+ *
+ * @module abstracts
+ * @exports {Class} AbstractProducer - Base class for message broker producers
+ * @exports {Class} AbstractConsumer - Base class for message broker consumers
+ * @exports {Class} AbstractCache - Base class for cache implementations
+ * @exports {Class} AbstractMonitorService - Base class for backpressure monitoring services
  *
  * Example:
  *   const { AbstractProducer } = require("@/abstracts");

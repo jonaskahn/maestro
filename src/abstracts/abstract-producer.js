@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Abstract Producer Base Class for message broker implementations
@@ -59,13 +59,9 @@ class AbstractProducer {
   }
 
   #validateRequiredFields(config) {
-    const missingFields = REQUIRED_CONFIG_FIELDS.filter(
-      (field) => !config[field],
-    );
+    const missingFields = REQUIRED_CONFIG_FIELDS.filter(field => !config[field]);
     if (missingFields.length > 0) {
-      throw new Error(
-        `Producer configuration missing required fields: ${missingFields.join(", ")}`,
-      );
+      throw new Error(`Producer configuration missing required fields: ${missingFields.join(", ")}`);
     }
   }
 
@@ -123,14 +119,8 @@ class AbstractProducer {
   #removeShutdownListeners() {
     process.removeListener("SIGINT", this.#handleGracefulShutdownProducer);
     process.removeListener("SIGTERM", this.#handleGracefulShutdownProducer);
-    process.removeListener(
-      "uncaughtException",
-      this.#handleGracefulShutdownProducer,
-    );
-    process.removeListener(
-      "unhandledRejection",
-      this.#handleGracefulShutdownProducer,
-    );
+    process.removeListener("uncaughtException", this.#handleGracefulShutdownProducer);
+    process.removeListener("unhandledRejection", this.#handleGracefulShutdownProducer);
   }
 
   async #handleGracefulShutdownProducer(signal = "unknown") {
@@ -142,7 +132,7 @@ class AbstractProducer {
     try {
       this.#isShuttingDown = true;
       logger.logInfo(
-        `⏼ ${this.getBrokerType().toUpperCase()} producer received ${signal} signal, shutting down gracefully`,
+        `⏼ ${this.getBrokerType().toUpperCase()} producer received ${signal} signal, shutting down gracefully`
       );
 
       this.#removeShutdownListeners();
@@ -151,10 +141,7 @@ class AbstractProducer {
         await this.disconnect();
       }
     } catch (error) {
-      logger.logError(
-        `Error during graceful shutdown of ${this.getBrokerType()} producer`,
-        error,
-      );
+      logger.logError(`Error during graceful shutdown of ${this.getBrokerType()} producer`, error);
     } finally {
       if (signal !== "uncaughtException" && signal !== "unhandledRejection") {
         if (typeof process.exit === "function") {
@@ -165,27 +152,15 @@ class AbstractProducer {
   }
 
   #setupGracefulShutdown() {
-    process.on(
-      "SIGINT",
-      this.#handleGracefulShutdownProducer.bind(this, "SIGINT"),
-    );
-    process.on(
-      "SIGTERM",
-      this.#handleGracefulShutdownProducer.bind(this, "SIGTERM"),
-    );
-    process.on(
-      "uncaughtException",
-      this.#handleGracefulShutdownProducer.bind(this, "uncaughtException"),
-    );
-    process.on(
-      "unhandledRejection",
-      this.#handleGracefulShutdownProducer.bind(this, "unhandledRejection"),
-    );
+    process.on("SIGINT", this.#handleGracefulShutdownProducer.bind(this, "SIGINT"));
+    process.on("SIGTERM", this.#handleGracefulShutdownProducer.bind(this, "SIGTERM"));
+    process.on("uncaughtException", this.#handleGracefulShutdownProducer.bind(this, "uncaughtException"));
+    process.on("unhandledRejection", this.#handleGracefulShutdownProducer.bind(this, "unhandledRejection"));
   }
 
   _logConfigurationLoaded() {
     logger.logDebug(
-      `🐞${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this.config, null, 2)}`,
+      `🐞${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this.config, null, 2)}`
     );
   }
 
@@ -199,9 +174,7 @@ class AbstractProducer {
     }
 
     await this.#cacheLayer.connect();
-    logger.logInfo(
-      `🔌 ${this.getBrokerType().toUpperCase()} producer connected to cache layer`,
-    );
+    logger.logInfo(`🔌 ${this.getBrokerType().toUpperCase()} producer connected to cache layer`);
   }
 
   async #connectToMonitorServiceIfAvailable() {
@@ -209,15 +182,11 @@ class AbstractProducer {
       return;
     }
     await this.#monitorService.connect();
-    logger.logInfo(
-      `ℹ️ ${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`,
-    );
+    logger.logInfo(`ℹ️ ${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`);
   }
 
   async _connectToMessageBroker() {
-    throw new Error(
-      "_connectToMessageBroker method must be implemented by subclass",
-    );
+    throw new Error("_connectToMessageBroker method must be implemented by subclass");
   }
 
   async performConnection() {
@@ -250,27 +219,20 @@ class AbstractProducer {
       this.#markAsConnected();
     } catch (error) {
       this.#markAsDisconnected();
-      logger.logError(
-        `Failed to connect ${this.getBrokerType()} producer`,
-        error,
-      );
+      logger.logError(`Failed to connect ${this.getBrokerType()} producer`, error);
       throw error;
     }
   }
 
   async _disconnectFromMessageBroker() {
-    throw new Error(
-      "_disconnectFromMessageBroker method must be implemented by subclass",
-    );
+    throw new Error("_disconnectFromMessageBroker method must be implemented by subclass");
   }
 
   async #disconnectCacheIfAvailable() {
     try {
       await this.#cacheLayer?.disconnect();
       this.#cacheLayer = null;
-      logger.logInfo(
-        `${this.getBrokerType()} producer disconnected from cache layer`,
-      );
+      logger.logInfo(`${this.getBrokerType()} producer disconnected from cache layer`);
     } catch (error) {
       logger.logWarning(`Error disconnecting from cache layer`, error);
     }
@@ -280,9 +242,7 @@ class AbstractProducer {
     try {
       await this.#monitorService?.disconnect();
       this.#monitorService = null;
-      logger.logInfo(
-        `${this.getBrokerType()} producer disconnected from monitor layer`,
-      );
+      logger.logInfo(`${this.getBrokerType()} producer disconnected from monitor layer`);
     } catch (error) {
       logger.logWarning(`Error disconnecting from monitor layer`, error);
     }
@@ -292,9 +252,7 @@ class AbstractProducer {
     try {
       await this.#distributedLockService?.release();
       this.#distributedLockService = null;
-      logger.logInfo(
-        `${this.getBrokerType()} producer stop distributed lock service`,
-      );
+      logger.logInfo(`${this.getBrokerType()} producer stop distributed lock service`);
     } catch (error) {
       logger.logWarning(`Error stop distributed lock service`, error);
     }
@@ -313,23 +271,16 @@ class AbstractProducer {
    */
   async disconnect() {
     if (!this.#isAlreadyConnected()) {
-      logger.logWarning(
-        `${this.getBrokerType()} producer is already disconnected`,
-      );
+      logger.logWarning(`${this.getBrokerType()} producer is already disconnected`);
       return;
     }
 
     try {
       await this.performDisconnection();
       this.#markAsDisconnected();
-      logger.logInfo(
-        `${this.getBrokerType()} producer disconnected successfully`,
-      );
+      logger.logInfo(`${this.getBrokerType()} producer disconnected successfully`);
     } catch (error) {
-      logger.logError(
-        `Error disconnecting ${this.getBrokerType()} producer`,
-        error,
-      );
+      logger.logError(`Error disconnecting ${this.getBrokerType()} producer`, error);
       throw error;
     }
   }
@@ -349,19 +300,15 @@ class AbstractProducer {
       const status = await this.#monitorService.getBackpressureStatus();
       const delay = status.recommendedDelay || 1000;
 
-      logger.logWarning(
-        `‼️ Backpressure detected (${status.backpressureLevel}), pausing for ${delay}ms`,
-        {
-          topic: this.#topic,
-          brokerType: this.getBrokerType(),
-          metrics: status.metrics,
-        },
-      );
+      logger.logWarning(`‼️ Backpressure detected (${status.backpressureLevel}), pausing for ${delay}ms`, {
+        topic: this.#topic,
+        brokerType: this.getBrokerType(),
+        metrics: status.metrics,
+      });
 
-      await new Promise((resolve) => setTimeout(resolve, delay));
+      await new Promise(resolve => setTimeout(resolve, delay));
 
-      const stillInBackpressure =
-        await this.#monitorService.shouldPauseProcessing();
+      const stillInBackpressure = await this.#monitorService.shouldPauseProcessing();
 
       if (stillInBackpressure) {
         const newStatus = await this.#monitorService.getBackpressureStatus();
@@ -371,7 +318,7 @@ class AbstractProducer {
             topic: this.#topic,
             brokerType: this.getBrokerType(),
             metrics: newStatus.metrics,
-          },
+          }
         );
         return true;
       } else {
@@ -433,15 +380,10 @@ class AbstractProducer {
   async #getExcludedIds() {
     try {
       const hardExclusions = await this.#getProcessingIds();
-      const softExclusions = this.#isSuppressionFullyEnabled()
-        ? await this.#getSuppressedIds()
-        : [];
+      const softExclusions = this.#isSuppressionFullyEnabled() ? await this.#getSuppressedIds() : [];
       return [...new Set([...hardExclusions, ...softExclusions])];
     } catch (error) {
-      logger.logWarning(
-        "Failed to get excluded IDs, continuing without exclusions",
-        error,
-      );
+      logger.logWarning("Failed to get excluded IDs, continuing without exclusions", error);
       return [];
     }
   }
@@ -490,7 +432,7 @@ class AbstractProducer {
     } catch (error) {
       logger.logError(
         `Producer failed to send suppressed messages, aware of duplication will be appeared faster than excepted.`,
-        error,
+        error
       );
     }
   }
@@ -514,15 +456,11 @@ class AbstractProducer {
   }
 
   _createBrokerMessages(_items) {
-    throw new Error(
-      "_createBrokerMessages method must be implemented by subclass",
-    );
+    throw new Error("_createBrokerMessages method must be implemented by subclass");
   }
 
   async _sendMessagesToBroker(_messages, _options) {
-    throw new Error(
-      "_sendMessagesToBroker method must be implemented by subclass",
-    );
+    throw new Error("_sendMessagesToBroker method must be implemented by subclass");
   }
 
   async #acquireLock(waitTime) {
@@ -533,10 +471,7 @@ class AbstractProducer {
     try {
       return await this.#distributedLockService.acquire(waitTime);
     } catch (error) {
-      logger.logError(
-        `Error acquiring lock for ${this.getBrokerType()} producer`,
-        error,
-      );
+      logger.logError(`Error acquiring lock for ${this.getBrokerType()} producer`, error);
       return false;
     }
   }
@@ -544,7 +479,7 @@ class AbstractProducer {
   _skipMessagesSending(envelopedMessages) {
     const skippedCount = envelopedMessages.length;
     logger.logWarning(
-      `Skipped sending ${skippedCount} messages to ${this.getBrokerType()} broker lock acquisition failure)`,
+      `Skipped sending ${skippedCount} messages to ${this.getBrokerType()} broker lock acquisition failure)`
     );
 
     return {
@@ -562,10 +497,7 @@ class AbstractProducer {
     try {
       return await this.#distributedLockService?.release();
     } catch (error) {
-      logger.logWarning(
-        `Error releasing lock for ${this.getBrokerType()} producer`,
-        error,
-      );
+      logger.logWarning(`Error releasing lock for ${this.getBrokerType()} producer`, error);
       return false;
     }
   }
@@ -577,9 +509,7 @@ class AbstractProducer {
       }
       const messages = this._createBrokerMessages(items);
       const sendResult = await this._sendMessagesToBroker(messages, options);
-      logger.logInfo(
-        `Successfully sent ${messages.length} messages to ${this.getBrokerType()} broker`,
-      );
+      logger.logInfo(`Successfully sent ${messages.length} messages to ${this.getBrokerType()} broker`);
       return {
         success: true,
         sent: messages.length,
@@ -588,10 +518,7 @@ class AbstractProducer {
         details: sendResult || {},
       };
     } catch (error) {
-      logger.logError(
-        `Failed to send messages to ${this.getBrokerType()} broker`,
-        error,
-      );
+      logger.logError(`Failed to send messages to ${this.getBrokerType()} broker`, error);
       throw error;
     }
   }
@@ -601,19 +528,15 @@ class AbstractProducer {
     const currentRetry = options.currentRetry || 0;
 
     if (currentRetry >= maxRetries) {
-      throw new Error(
-        `Max retries (${maxRetries}) exceeded for ${this.getBrokerType()} producer`,
-      );
+      throw new Error(`Max retries (${maxRetries}) exceeded for ${this.getBrokerType()} producer`);
     }
 
     const baseDelay = options?.baseDelay || 1000;
     const delay = baseDelay * Math.pow(2, currentRetry);
 
-    logger.logInfo(
-      `Retrying message send after ${delay}ms (attempt ${currentRetry + 1}/${maxRetries})`,
-    );
+    logger.logInfo(`Retrying message send after ${delay}ms (attempt ${currentRetry + 1}/${maxRetries})`);
 
-    await new Promise((resolve) => setTimeout(resolve, delay));
+    await new Promise(resolve => setTimeout(resolve, delay));
 
     const retryOptions = {
       ...options,
@@ -624,14 +547,10 @@ class AbstractProducer {
   }
 
   async #handleLockAcquisitionFailure(items, options = {}) {
-    logger.logWarning(
-      `Failed to acquire lock for ${this.getBrokerType()} producer`,
-    );
+    logger.logWarning(`Failed to acquire lock for ${this.getBrokerType()} producer`);
 
     if (options?.failOnLockTimeout) {
-      throw new Error(
-        `Failed to acquire lock for ${this.getBrokerType()} producer`,
-      );
+      throw new Error(`Failed to acquire lock for ${this.getBrokerType()} producer`);
     }
 
     if (options?.skipOnLockTimeout) {
@@ -703,7 +622,7 @@ class AbstractProducer {
   #buildProcessingResult(items, sendResult) {
     const { success, sent, skipped, error, details } = sendResult;
 
-    const itemIds = items.map((item) => this.getItemId(item));
+    const itemIds = items.map(item => this.getItemId(item));
 
     return {
       success,
@@ -737,9 +656,7 @@ class AbstractProducer {
       return;
     }
 
-    logger.logInfo(
-      `Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this.#topic} topic`,
-    );
+    logger.logInfo(`Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this.#topic} topic`);
   }
 
   /**
@@ -754,9 +671,7 @@ class AbstractProducer {
       this.#ensureConnected();
       const isUnderPressure = await this.#isMessageBrokerUnderPressure();
       if (isUnderPressure) {
-        logger.logWarning(
-          "☢️ System is under pressure, stop sending new items",
-        );
+        logger.logWarning("☢️ System is under pressure, stop sending new items");
         return this.#creatEmptyResult();
       }
       const excludedIds = await this.#getExcludedIds();
@@ -770,10 +685,7 @@ class AbstractProducer {
 
       return result;
     } catch (error) {
-      logger.logError(
-        `Failed to produce messages to ${this.#topic} topic`,
-        error,
-      );
+      logger.logError(`Failed to produce messages to ${this.#topic} topic`, error);
       throw error;
     }
   }
@@ -785,8 +697,7 @@ class AbstractProducer {
   _getStatusConfig() {
     return {
       enabledSuppression: this.#isSuppressionFullyEnabled(),
-      enabledDistributedLock:
-        this.#enabledDistributedLock && Boolean(this.#distributedLockService),
+      enabledDistributedLock: this.#enabledDistributedLock && Boolean(this.#distributedLockService),
       enabledBackpressure: Boolean(this.#monitorService),
       enabledCache: Boolean(this.#cacheLayer),
     };

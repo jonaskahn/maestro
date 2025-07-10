@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Distributed Lock Service for coordinating access to shared resources across multiple processes
@@ -57,17 +57,13 @@ class DistributedLockService {
 
   async #ensureCacheInitialized() {
     if (!this.cacheLayer) {
-      logger.logWarning(
-        "No cache instance provided, distributed locking disabled",
-      );
+      logger.logWarning("No cache instance provided, distributed locking disabled");
       return;
     }
 
     if (!this.cacheLayer.isConnected && this.cacheLayer.connect) {
       await this.cacheLayer.connect();
-      logger.logInfo(
-        `Distributed lock initialized with cache: ${this.lockKey}`,
-      );
+      logger.logInfo(`Distributed lock initialized with cache: ${this.lockKey}`);
     }
   }
 
@@ -83,33 +79,24 @@ class DistributedLockService {
           throw new Error("No cache layer available for lock operations");
         }
 
-        const result = await this.cacheLayer.setIfNotExists(
-          this.lockKey,
-          this.lockValue,
-          this.ttl,
-        );
+        const result = await this.cacheLayer.setIfNotExists(this.lockKey, this.lockValue, this.ttl);
 
         if (result) {
-          logger.logInfo(
-            `Lock acquired: ${this.lockKey} (attempt ${attemptCount})`,
-          );
+          logger.logInfo(`Lock acquired: ${this.lockKey} (attempt ${attemptCount})`);
           return { success: true };
         }
 
-        logger.logDebug(
-          `Lock acquisition attempt ${attemptCount} failed, retrying...`,
-        );
+        logger.logDebug(`Lock acquisition attempt ${attemptCount} failed, retrying...`);
 
         const baseDelay = TtlConfig.retryDelayMs;
         const maxDelay = Math.min(
           baseDelay * Math.pow(DEFAULT_VALUES.BACKOFF_MULTIPLIER, attemptCount),
-          TtlConfig.maxBackoffMs,
+          TtlConfig.maxBackoffMs
         );
-        const randomFactor =
-          1 + (Math.random() * DEFAULT_VALUES.BACKOFF_RANDOMNESS) / 100;
+        const randomFactor = 1 + (Math.random() * DEFAULT_VALUES.BACKOFF_RANDOMNESS) / 100;
         const delay = Math.floor(maxDelay * randomFactor);
 
-        await new Promise((resolve) => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, delay));
       } catch (error) {
         logger.logError(`Lock acquisition error for ${this.lockKey}`, error);
         return { success: false, error };
@@ -184,10 +171,7 @@ class DistributedLockService {
     }
 
     const refreshIntervalMs = Math.floor(this.ttl / 3);
-    this.refreshInterval = setInterval(
-      () => this.#performRefresh(),
-      refreshIntervalMs,
-    );
+    this.refreshInterval = setInterval(() => this.#performRefresh(), refreshIntervalMs);
   }
 
   /**
@@ -232,9 +216,7 @@ class DistributedLockService {
       if (releaseResult.success) {
         logger.logInfo(`Lock released: ${this.lockKey}`);
       } else {
-        logger.logWarning(
-          `Failed to release lock: ${this.lockKey} (not lock owner)`,
-        );
+        logger.logWarning(`Failed to release lock: ${this.lockKey} (not lock owner)`);
       }
 
       return releaseResult.success;
@@ -252,11 +234,8 @@ class DistributedLockService {
    * @throws {Error} When disconnection fails
    */
   async disconnect() {
-    await this.release().catch((error) => {
-      logger.logWarning(
-        `Error releasing lock during disconnect: ${this.lockKey}`,
-        error,
-      );
+    await this.release().catch(error => {
+      logger.logWarning(`Error releasing lock during disconnect: ${this.lockKey}`, error);
     });
 
     this.#stopAutoRefresh();

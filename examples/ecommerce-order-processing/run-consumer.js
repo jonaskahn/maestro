@@ -37,7 +37,7 @@ class ConsumerDaemon {
   setupGracefulShutdown() {
     const signals = ["SIGTERM", "SIGINT", "SIGUSR2"];
 
-    signals.forEach((signal) => {
+    signals.forEach(signal => {
       process.on(signal, async () => {
         Logger.info(`Received ${signal}, shutting down gracefully`);
         await this.cleanup();
@@ -73,7 +73,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch((error) => {
+  main().catch(error => {
     Logger.error("Startup failed", error);
     process.exit(1);
   });

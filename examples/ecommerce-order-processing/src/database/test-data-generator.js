@@ -15,30 +15,8 @@ const ORDER_TYPES = [
 ];
 
 const CUSTOMER_NAMES = {
-  FIRST_NAMES: [
-    "John",
-    "Jane",
-    "Michael",
-    "Sarah",
-    "David",
-    "Emma",
-    "James",
-    "Lisa",
-    "Robert",
-    "Mary",
-  ],
-  LAST_NAMES: [
-    "Smith",
-    "Johnson",
-    "Williams",
-    "Brown",
-    "Jones",
-    "Garcia",
-    "Miller",
-    "Davis",
-    "Rodriguez",
-    "Martinez",
-  ],
+  FIRST_NAMES: ["John", "Jane", "Michael", "Sarah", "David", "Emma", "James", "Lisa", "Robert", "Mary"],
+  LAST_NAMES: ["Smith", "Johnson", "Williams", "Brown", "Jones", "Garcia", "Miller", "Davis", "Rodriguez", "Martinez"],
 };
 
 const PRODUCT_CATALOG = [

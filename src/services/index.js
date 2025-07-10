@@ -4,6 +4,10 @@
  *
  * Central export for generic services.
  *
+ * @module services
+ * @exports {Class} DistributedLockService - Service for distributed locking across processes
+ * @exports {Object} LoggerService - Centralized logging service
+ *
  * Example:
  *   const { DistributedLockService, LoggerService } = require("@/services");
  */

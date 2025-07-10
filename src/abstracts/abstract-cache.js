@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Abstract Cache Layer Base Class for cache implementation providers
@@ -70,21 +70,14 @@ class AbstractCache {
 
     this.implementation = config.implementation;
 
-    const processingKeySuffix =
-      this.getEnvironmentValue(ENV_KEYS.PROCESSING_SUFFIX) ||
-      KEY_SUFFIXES.PROCESSING;
-    const freezingKeySuffix =
-      this.getEnvironmentValue(ENV_KEYS.FREEZING_SUFFIX) ||
-      KEY_SUFFIXES.FREEZING;
+    const processingKeySuffix = this.getEnvironmentValue(ENV_KEYS.PROCESSING_SUFFIX) || KEY_SUFFIXES.PROCESSING;
+    const freezingKeySuffix = this.getEnvironmentValue(ENV_KEYS.FREEZING_SUFFIX) || KEY_SUFFIXES.FREEZING;
 
     this.config = {
       processingPrefix: `${config.keyPrefix}${processingKeySuffix}`,
       suppressionPrefix: `${config.keyPrefix}${freezingKeySuffix}`,
       processingTtl: config.processingTtl || CacheConfig.processingTtl,
-      suppressionTtl:
-        config.suppressionTtl ||
-        config.processingTtl * 3 ||
-        CacheConfig.freezingTtl,
+      suppressionTtl: config.suppressionTtl || config.processingTtl * 3 || CacheConfig.freezingTtl,
       connectionOptions: config.connectionOptions || {},
       retryOptions: config.retryOptions || {},
     };
@@ -119,9 +112,7 @@ class AbstractCache {
   async connect() {
     if (await this._checkExistingConnection()) {
       this.#isConnected = CONNECTION_STATES.CONNECTED;
-      logger.logDebug(
-        `Using existing connection to ${this.implementation} cache`,
-      );
+      logger.logDebug(`Using existing connection to ${this.implementation} cache`);
       return;
     }
 
@@ -130,18 +121,13 @@ class AbstractCache {
       this.#isConnected = CONNECTION_STATES.CONNECTED;
     } catch (error) {
       this.#isConnected = CONNECTION_STATES.DISCONNECTED;
-      logger.logError(
-        `Failed to connect to ${this.implementation} cache`,
-        error,
-      );
+      logger.logError(`Failed to connect to ${this.implementation} cache`, error);
       throw error;
     }
   }
 
   async _checkExistingConnection() {
-    throw new Error(
-      "_checkExistingConnection method must be implemented by subclass",
-    );
+    throw new Error("_checkExistingConnection method must be implemented by subclass");
   }
 
   async _connectTo() {
@@ -158,10 +144,7 @@ class AbstractCache {
         await this._disconnectFrom();
         this.#isConnected = CONNECTION_STATES.DISCONNECTED;
       } catch (error) {
-        logger.logWarning(
-          `Error disconnecting from ${this.implementation} cache`,
-          error,
-        );
+        logger.logWarning(`Error disconnecting from ${this.implementation} cache`, error);
         this.#isConnected = CONNECTION_STATES.DISCONNECTED;
       }
     }
@@ -272,9 +255,7 @@ class AbstractCache {
   }
 
   async _setKeyIfNotExists(_key, _value, _ttlMs) {
-    throw new Error(
-      "_setKeyIfNotExists method must be implemented by subclass",
-    );
+    throw new Error("_setKeyIfNotExists method must be implemented by subclass");
   }
 
   /**
@@ -335,9 +316,7 @@ class AbstractCache {
   }
 
   async _findKeysByPattern(_pattern) {
-    throw new Error(
-      "_findKeysByPattern method must be implemented by subclass",
-    );
+    throw new Error("_findKeysByPattern method must be implemented by subclass");
   }
 
   /**
@@ -397,10 +376,7 @@ class AbstractCache {
    * @returns {Promise<string[]>} Processing item IDs
    */
   async getProcessingIds() {
-    return await this.getIdsByPrefix(
-      "processing",
-      this.config.processingPrefix,
-    );
+    return await this.getIdsByPrefix("processing", this.config.processingPrefix);
   }
 
   async getIdsByPrefix(typeName, keyPrefix) {
@@ -408,7 +384,7 @@ class AbstractCache {
       const pattern = `${keyPrefix}*`;
       const keys = await this.keys(pattern);
 
-      const ids = keys.map((key) => key.substring(keyPrefix.length));
+      const ids = keys.map(key => key.substring(keyPrefix.length));
       logger.logDebug(`Found ${ids.length} ${typeName} IDs`);
 
       return ids;
@@ -423,10 +399,7 @@ class AbstractCache {
    * @returns {Promise<string[]>} Freezing item IDs
    */
   async getSuppressedIds() {
-    return await this.getIdsByPrefix(
-      "suppressed",
-      this.config.suppressionPrefix,
-    );
+    return await this.getIdsByPrefix("suppressed", this.config.suppressionPrefix);
   }
 }
 

@@ -2,7 +2,7 @@
  * @license
  * Copyleft (c) 2025 Jonas Kahn. All rights are not reserved.
  *
- * This source code is licensed under the Apache License 2.0 found in the
+ * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
  * Redis Cache Layer Implementation
@@ -23,10 +23,7 @@ class RedisCacheClient extends AbstractCache {
     const connectionOptions = this.config.connectionOptions || {};
 
     const clientConfig = {
-      url:
-        connectionOptions.url ||
-        process.env.JO_REDIS_URL ||
-        "redis://localhost:6379",
+      url: connectionOptions.url || process.env.JO_REDIS_URL || "redis://localhost:6379",
       password: connectionOptions.password || process.env.JO_REDIS_PASSWORD,
       retry_strategy: this.#createRetryStrategy(),
       socket: {
@@ -42,16 +39,13 @@ class RedisCacheClient extends AbstractCache {
   }
 
   #createRetryStrategy() {
-    const maxRetryAttempts =
-      parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
+    const maxRetryAttempts = parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
     const retryDelayMs = parseInt(process.env.JO_REDIS_DELAY_MS) || 1000;
     const maxDelayMs = parseInt(process.env.JO_REDIS_MAX_DELAY_MS) || 30000;
 
-    return (attemptNumber) => {
+    return attemptNumber => {
       if (attemptNumber > maxRetryAttempts) {
-        logger.logError(
-          `❌ Redis retry limit exceeded (${attemptNumber} attempts)`,
-        );
+        logger.logError(`❌ Redis retry limit exceeded (${attemptNumber} attempts)`);
         return null;
       }
 
@@ -62,29 +56,24 @@ class RedisCacheClient extends AbstractCache {
   }
 
   #createReconnectionStrategy() {
-    const maxRetryAttempts =
-      parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
+    const maxRetryAttempts = parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
     const retryDelayMs = parseInt(process.env.JO_REDIS_DELAY_MS) || 1000;
     const maxDelayMs = parseInt(process.env.JO_REDIS_MAX_DELAY_MS) || 30000;
 
-    return (retryAttemptNumber) => {
+    return retryAttemptNumber => {
       if (retryAttemptNumber > maxRetryAttempts) {
-        logger.logError(
-          `❌ Redis reconnection limit exceeded (${retryAttemptNumber} attempts)`,
-        );
+        logger.logError(`❌ Redis reconnection limit exceeded (${retryAttemptNumber} attempts)`);
         return new Error("Redis connection failed permanently");
       }
 
       const delayMs = Math.min(retryAttemptNumber * retryDelayMs, maxDelayMs);
-      logger.logInfo(
-        `🔄 Redis reconnecting in ${delayMs}ms (attempt ${retryAttemptNumber})`,
-      );
+      logger.logInfo(`🔄 Redis reconnecting in ${delayMs}ms (attempt ${retryAttemptNumber})`);
       return delayMs;
     };
   }
 
   #attachEventHandlers(client) {
-    client.on("error", (error) => {
+    client.on("error", error => {
       logger.logError("❌ Redis client error", error);
     });
 
@@ -179,10 +168,7 @@ class RedisCacheClient extends AbstractCache {
       }
       return sentKeys;
     } catch (error) {
-      logger.logError(
-        `❌ Error scanning Redis keys with pattern '${pattern}':`,
-        error,
-      );
+      logger.logError(`❌ Error scanning Redis keys with pattern '${pattern}':`, error);
       throw error;
     }
   }

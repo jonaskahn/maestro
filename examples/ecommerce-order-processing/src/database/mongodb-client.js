@@ -62,9 +62,7 @@ class MongoDatabase {
       await this.client.connect();
 
       this.db = this.client.db(DB_CONFIG.dbName);
-      this.collections.orders = this.db.collection(
-        DB_CONFIG.collections.orders,
-      );
+      this.collections.orders = this.db.collection(DB_CONFIG.collections.orders);
 
       this.isConnected = true;
       Logger.success("Connected to MongoDB successfully");
@@ -108,18 +106,14 @@ class MongoDatabase {
         Logger.debug(`Created/verified collection: ${collectionName}`);
       }
 
-      this.collections.orders = this.db.collection(
-        DB_CONFIG.collections.orders,
-      );
+      this.collections.orders = this.db.collection(DB_CONFIG.collections.orders);
 
       await this.createIndexes();
 
       await this.validateSchema();
 
       Logger.success("MongoDB schema initialized successfully");
-      Logger.debug(
-        "Schema enforces: _id (ObjectId), state (1=pending, 2=completed, 3=failed)",
-      );
+      Logger.debug("Schema enforces: _id (ObjectId), state (1=pending, 2=completed, 3=failed)");
 
       await this.initializeData();
     } catch (error) {
@@ -165,7 +159,7 @@ class MongoDatabase {
     };
 
     if (excludedIds.length > 0) {
-      query._id = { $nin: excludedIds.map((id) => new ObjectId(id)) };
+      query._id = { $nin: excludedIds.map(id => new ObjectId(id)) };
     }
 
     const orders = await this.collections.orders
@@ -177,7 +171,7 @@ class MongoDatabase {
       .limit(limit)
       .toArray();
 
-    return orders.map((order) => ({
+    return orders.map(order => ({
       ...order,
       _id: order._id.toString(),
       state: order.state || ORDER_STATES.PENDING,
@@ -209,7 +203,7 @@ class MongoDatabase {
           completedAt: new Date(),
           updatedAt: new Date(),
         },
-      },
+      }
     );
 
     if (result.matchedCount === 0) {
@@ -250,10 +244,7 @@ class MongoDatabase {
       this.stats.totalFailed++;
     }
 
-    const result = await this.collections.orders.updateOne(
-      { _id: new ObjectId(orderId) },
-      { $set: updateData },
-    );
+    const result = await this.collections.orders.updateOne({ _id: new ObjectId(orderId) }, { $set: updateData });
 
     if (result.matchedCount === 0) {
       throw new Error(`Order ${orderId} not found`);
@@ -342,19 +333,14 @@ class MongoDatabase {
         createdThisSession: this.stats.totalCreated,
         completedThisSession: this.stats.totalCompleted,
         failedThisSession: this.stats.totalFailed,
-        processingRate:
-          this.stats.totalCompleted > 0
-            ? (this.stats.totalCompleted / this.stats.totalCreated) * 100
-            : 0,
+        processingRate: this.stats.totalCompleted > 0 ? (this.stats.totalCompleted / this.stats.totalCreated) * 100 : 0,
         successRate:
           this.stats.totalCompleted > 0
-            ? (this.stats.totalCompleted /
-                (this.stats.totalCompleted + this.stats.totalFailed)) *
-              100
+            ? (this.stats.totalCompleted / (this.stats.totalCompleted + this.stats.totalFailed)) * 100
             : 0,
       };
 
-      orderStats.forEach((stat) => {
+      orderStats.forEach(stat => {
         switch (stat._id) {
           case ORDER_STATES.PENDING:
             stats.pendingOrders = stat.count;
@@ -368,8 +354,7 @@ class MongoDatabase {
         }
       });
 
-      stats.totalOrders =
-        stats.pendingOrders + stats.completedOrders + stats.failedOrders;
+      stats.totalOrders = stats.pendingOrders + stats.completedOrders + stats.failedOrders;
       return stats;
     } catch (error) {
       Logger.error("Failed to get database stats", error);
@@ -419,28 +404,21 @@ class MongoDatabase {
       cleanupPromises.push(
         collection
           .deleteMany({})
-          .then((result) => {
-            Logger.debug(
-              `Deleted ${result.deletedCount} records from ${collectionName}`,
-            );
+          .then(result => {
+            Logger.debug(`Deleted ${result.deletedCount} records from ${collectionName}`);
             return result;
           })
-          .catch((error) => {
+          .catch(error => {
             Logger.error(`Failed to clean collection ${collectionName}`, error);
             return { deletedCount: 0, error };
-          }),
+          })
       );
     }
 
     const results = await Promise.all(cleanupPromises);
-    const totalDeleted = results.reduce(
-      (sum, result) => sum + result.deletedCount,
-      0,
-    );
+    const totalDeleted = results.reduce((sum, result) => sum + result.deletedCount, 0);
 
-    Logger.info(
-      `Total records deleted across all collections: ${totalDeleted}`,
-    );
+    Logger.info(`Total records deleted across all collections: ${totalDeleted}`);
     return { totalDeleted };
   }
 
@@ -477,16 +455,10 @@ class MongoDatabase {
   async createIndexes() {
     await this.collections.orders.createIndex(
       { state: 1, priority: 1, createdAt: 1 },
-      { name: "idx_order_processing" },
+      { name: "idx_order_processing" }
     );
-    await this.collections.orders.createIndex(
-      { updatedAt: 1 },
-      { name: "idx_updated_at" },
-    );
-    await this.collections.orders.createIndex(
-      { orderNumber: 1 },
-      { name: "idx_order_number", unique: true },
-    );
+    await this.collections.orders.createIndex({ updatedAt: 1 }, { name: "idx_updated_at" });
+    await this.collections.orders.createIndex({ orderNumber: 1 }, { name: "idx_order_number", unique: true });
 
     Logger.debug("Created indexes for efficient queries and constraints");
   }
@@ -496,9 +468,7 @@ class MongoDatabase {
    */
   async validateSchema() {
     // Check if collection exists
-    const collections = await this.db
-      .listCollections({ name: DB_CONFIG.collections.orders })
-      .toArray();
+    const collections = await this.db.listCollections({ name: DB_CONFIG.collections.orders }).toArray();
 
     if (collections.length === 0) {
       throw new Error("Orders collection does not exist");
@@ -508,21 +478,13 @@ class MongoDatabase {
     const indexes = await this.collections.orders.listIndexes().toArray();
 
     // Check for required indexes
-    const requiredIndexNames = [
-      "idx_order_processing",
-      "idx_updated_at",
-      "idx_order_number",
-    ];
-    const presentIndexNames = indexes.map((index) => index.name);
+    const requiredIndexNames = ["idx_order_processing", "idx_updated_at", "idx_order_number"];
+    const presentIndexNames = indexes.map(index => index.name);
 
-    const missingIndexes = requiredIndexNames.filter(
-      (name) => !presentIndexNames.includes(name),
-    );
+    const missingIndexes = requiredIndexNames.filter(name => !presentIndexNames.includes(name));
 
     if (missingIndexes.length > 0) {
-      Logger.warn(
-        `Missing indexes: ${missingIndexes.join(", ")}. Will create them.`,
-      );
+      Logger.warn(`Missing indexes: ${missingIndexes.join(", ")}. Will create them.`);
       await this.createIndexes();
     } else {
       Logger.debug("All required indexes are present");
@@ -531,9 +493,7 @@ class MongoDatabase {
     // Check for constraint enforcement
     // MongoDB doesn't enforce schema by default, but we can add JSONSchema validation
     // For simplicity, we'll just log a reminder here
-    Logger.debug(
-      "MongoDB schema validation depends on proper data insertion from application",
-    );
+    Logger.debug("MongoDB schema validation depends on proper data insertion from application");
 
     return true;
   }
@@ -646,14 +606,7 @@ class MongoDatabase {
    * Generate email from customer name
    */
   generateEmail(name) {
-    const domains = [
-      "gmail.com",
-      "yahoo.com",
-      "hotmail.com",
-      "outlook.com",
-      "example.com",
-      "company.co",
-    ];
+    const domains = ["gmail.com", "yahoo.com", "hotmail.com", "outlook.com", "example.com", "company.co"];
     const nameParts = name.toLowerCase().replace(/[^a-z0-9]/g, ".");
     const domain = domains[Math.floor(Math.random() * domains.length)];
     return `${nameParts}@${domain}`;
@@ -676,15 +629,11 @@ class MongoDatabase {
       { name: "Speaker", price: 129.99 },
     ];
 
-    const itemCount =
-      orderType === "bulk"
-        ? Math.floor(Math.random() * 10) + 5
-        : Math.floor(Math.random() * 4) + 1;
+    const itemCount = orderType === "bulk" ? Math.floor(Math.random() * 10) + 5 : Math.floor(Math.random() * 4) + 1;
 
     const items = [];
     for (let i = 0; i < itemCount; i++) {
-      const product =
-        productCatalog[Math.floor(Math.random() * productCatalog.length)];
+      const product = productCatalog[Math.floor(Math.random() * productCatalog.length)];
       const quantity = Math.floor(Math.random() * 3) + 1;
 
       items.push({

@@ -44,9 +44,7 @@ class OrderStateMapper {
   }
 
   static isCompleted(state) {
-    return (
-      state === NUMERIC_STATES.COMPLETED || state === ORDER_STATES.COMPLETED
-    );
+    return state === NUMERIC_STATES.COMPLETED || state === ORDER_STATES.COMPLETED;
   }
 
   static isPending(state) {

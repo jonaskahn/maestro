@@ -56,9 +56,7 @@ class TestCache extends AbstractCache {
     }
 
     try {
-      return typeof item.value === "string" && item.value.startsWith("{")
-        ? JSON.parse(item.value)
-        : item.value;
+      return typeof item.value === "string" && item.value.startsWith("{") ? JSON.parse(item.value) : item.value;
     } catch (e) {
       return item.value;
     }
@@ -100,7 +98,7 @@ class TestCache extends AbstractCache {
 
   async _findKeysByPattern(pattern) {
     const regex = new RegExp(pattern.replace(/\*/g, ".*"));
-    return Array.from(this.mockStorage.keys()).filter((key) => regex.test(key));
+    return Array.from(this.mockStorage.keys()).filter(key => regex.test(key));
   }
 }
 
@@ -126,28 +124,18 @@ describe("AbstractCache", () => {
 
   describe("Instantiation", () => {
     it("should reject direct AbstractCache instantiation", () => {
-      expect(() => new AbstractCache(testConfig)).toThrow(
-        "AbstractCache cannot be instantiated directly",
-      );
+      expect(() => new AbstractCache(testConfig)).toThrow("AbstractCache cannot be instantiated directly");
     });
 
     it("should reject missing configuration", () => {
       expect(() => new TestCache()).toThrow("Configuration must be an object");
-      expect(() => new TestCache("invalid")).toThrow(
-        "Configuration must be an object",
-      );
+      expect(() => new TestCache("invalid")).toThrow("Configuration must be an object");
     });
 
     it("should reject missing or empty keyPrefix", () => {
-      expect(() => new TestCache({})).toThrow(
-        "keyPrefix is required and must be a non-empty string",
-      );
-      expect(() => new TestCache({ keyPrefix: "" })).toThrow(
-        "keyPrefix is required and must be a non-empty string",
-      );
-      expect(() => new TestCache({ keyPrefix: " " })).toThrow(
-        "keyPrefix is required and must be a non-empty string",
-      );
+      expect(() => new TestCache({})).toThrow("keyPrefix is required and must be a non-empty string");
+      expect(() => new TestCache({ keyPrefix: "" })).toThrow("keyPrefix is required and must be a non-empty string");
+      expect(() => new TestCache({ keyPrefix: " " })).toThrow("keyPrefix is required and must be a non-empty string");
     });
 
     it("should apply default values for optional config parameters", () => {
@@ -196,12 +184,8 @@ describe("AbstractCache", () => {
         TEST_FALLBACK_KEY: "fallback-value",
       };
 
-      expect(cacheInstance.getEnvironmentValue(["TEST_ENV_KEY"])).toBe(
-        "test-value",
-      );
-      expect(
-        cacheInstance.getEnvironmentValue(["MISSING_KEY", "TEST_FALLBACK_KEY"]),
-      ).toBe("fallback-value");
+      expect(cacheInstance.getEnvironmentValue(["TEST_ENV_KEY"])).toBe("test-value");
+      expect(cacheInstance.getEnvironmentValue(["MISSING_KEY", "TEST_FALLBACK_KEY"])).toBe("fallback-value");
       expect(cacheInstance.getEnvironmentValue(["MISSING_KEY"])).toBeNull();
 
       process.env = originalEnv;
@@ -228,9 +212,7 @@ describe("AbstractCache", () => {
 
     it("should handle connection errors", async () => {
       const errorMsg = "Connection failure";
-      jest
-        .spyOn(cacheInstance, "_connectTo")
-        .mockRejectedValueOnce(new Error(errorMsg));
+      jest.spyOn(cacheInstance, "_connectTo").mockRejectedValueOnce(new Error(errorMsg));
 
       await expect(cacheInstance.connect()).rejects.toThrow(errorMsg);
 
@@ -248,9 +230,7 @@ describe("AbstractCache", () => {
 
     it("should handle disconnection errors gracefully", async () => {
       await cacheInstance.connect();
-      jest
-        .spyOn(cacheInstance, "_disconnectFrom")
-        .mockRejectedValueOnce(new Error("Disconnect failure"));
+      jest.spyOn(cacheInstance, "_disconnectFrom").mockRejectedValueOnce(new Error("Disconnect failure"));
 
       await cacheInstance.disconnect();
 
@@ -284,7 +264,7 @@ describe("AbstractCache", () => {
       const immediateValue = await cacheInstance.get("expiringKey");
       expect(immediateValue).toBe("temp-value");
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 100));
 
       const expiredValue = await cacheInstance.get("expiringKey");
       expect(expiredValue).toBeNull();
@@ -308,17 +288,11 @@ describe("AbstractCache", () => {
     it("should conditionally set keys if not exist", async () => {
       await cacheInstance.set("uniqueKey", "original");
 
-      const resultExisting = await cacheInstance.setIfNotExists(
-        "uniqueKey",
-        "replacement",
-      );
+      const resultExisting = await cacheInstance.setIfNotExists("uniqueKey", "replacement");
       expect(resultExisting).toBe(false);
       expect(await cacheInstance.get("uniqueKey")).toBe("original");
 
-      const resultNew = await cacheInstance.setIfNotExists(
-        "newKey",
-        "brandnew",
-      );
+      const resultNew = await cacheInstance.setIfNotExists("newKey", "brandnew");
       expect(resultNew).toBe(true);
       expect(await cacheInstance.get("newKey")).toBe("brandnew");
     });
@@ -329,7 +303,7 @@ describe("AbstractCache", () => {
       const shortTtl = 50; // 50ms
       await cacheInstance.expire("updateTtl", shortTtl);
 
-      await new Promise((resolve) => setTimeout(resolve, 100));
+      await new Promise(resolve => setTimeout(resolve, 100));
       expect(await cacheInstance.get("updateTtl")).toBeNull();
     });
 
@@ -345,26 +319,16 @@ describe("AbstractCache", () => {
     });
 
     it("should reject invalid key values", async () => {
-      await expect(cacheInstance.set("", "value")).rejects.toThrow(
-        "Key must be a non-empty string",
-      );
-      await expect(cacheInstance.set(null, "value")).rejects.toThrow(
-        "Key must be a non-empty string",
-      );
-      await expect(cacheInstance.set("key", null)).rejects.toThrow(
-        "Value cannot be undefined or null",
-      );
+      await expect(cacheInstance.set("", "value")).rejects.toThrow("Key must be a non-empty string");
+      await expect(cacheInstance.set(null, "value")).rejects.toThrow("Key must be a non-empty string");
+      await expect(cacheInstance.set("key", null)).rejects.toThrow("Value cannot be undefined or null");
     });
 
     it("should reject operations when disconnected", async () => {
       await cacheInstance.disconnect();
 
-      await expect(cacheInstance.set("key", "value")).rejects.toThrow(
-        "Cache is not connected",
-      );
-      await expect(cacheInstance.get("key")).rejects.toThrow(
-        "Cache is not connected",
-      );
+      await expect(cacheInstance.set("key", "value")).rejects.toThrow("Cache is not connected");
+      await expect(cacheInstance.get("key")).rejects.toThrow("Cache is not connected");
     });
   });
 
@@ -409,9 +373,7 @@ describe("AbstractCache", () => {
     it("should check if items are suppressed", async () => {
       await cacheInstance.markAsSuppressed(itemId);
       expect(await cacheInstance.isSuppressedRecently(itemId)).toBe(true);
-      expect(await cacheInstance.isSuppressedRecently("other-item")).toBe(
-        false,
-      );
+      expect(await cacheInstance.isSuppressedRecently("other-item")).toBe(false);
     });
 
     it("should retrieve suppressed item IDs", async () => {
@@ -439,21 +401,11 @@ describe("AbstractCache", () => {
       const unimplemented = createUnimplementedInstance();
 
       // Test a subset of critical abstract methods
-      await expect(unimplemented._checkExistingConnection()).rejects.toThrow(
-        /must be implemented/,
-      );
-      await expect(unimplemented._connectTo()).rejects.toThrow(
-        /must be implemented/,
-      );
-      await expect(unimplemented._getKeyValue("key")).rejects.toThrow(
-        /must be implemented/,
-      );
-      await expect(unimplemented._setKeyValue("key", "value")).rejects.toThrow(
-        /must be implemented/,
-      );
-      await expect(unimplemented._deleteKey("key")).rejects.toThrow(
-        /must be implemented/,
-      );
+      await expect(unimplemented._checkExistingConnection()).rejects.toThrow(/must be implemented/);
+      await expect(unimplemented._connectTo()).rejects.toThrow(/must be implemented/);
+      await expect(unimplemented._getKeyValue("key")).rejects.toThrow(/must be implemented/);
+      await expect(unimplemented._setKeyValue("key", "value")).rejects.toThrow(/must be implemented/);
+      await expect(unimplemented._deleteKey("key")).rejects.toThrow(/must be implemented/);
     });
   });
 });
