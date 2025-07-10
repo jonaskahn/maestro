@@ -156,7 +156,7 @@ class TestProducer extends AbstractProducer {
 describe("AbstractProducer", () => {
   let producerInstance;
   const validConfig = {
-    topic: "test-topic",
+    topic: "test-_topic",
     useSuppression: true,
     useDistributedLock: true,
     useMonitor: true,
@@ -180,13 +180,13 @@ describe("AbstractProducer", () => {
     it("should throw error when instantiating with invalid config", () => {
       expect(() => new TestProducer()).toThrow("Producer configuration must be an object");
       expect(() => new TestProducer("invalid")).toThrow("Producer configuration must be an object");
-      expect(() => new TestProducer({})).toThrow("Producer configuration missing required fields: topic");
+      expect(() => new TestProducer({})).toThrow("Producer configuration missing required fields: _topic");
     });
 
     it("should create producer instance with valid configuration", () => {
       producerInstance = new TestProducer(validConfig);
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance.config.topic).toBe("test-topic");
+      expect(producerInstance.config.topic).toBe("test-_topic");
       expect(producerInstance.getBrokerType()).toBe("test-broker");
     });
 
@@ -197,10 +197,10 @@ describe("AbstractProducer", () => {
 
     it("should initialize with minimal configuration", () => {
       producerInstance = new TestProducer({
-        topic: "minimal-topic",
+        topic: "minimal-_topic",
       });
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance.config.topic).toBe("minimal-topic");
+      expect(producerInstance.config.topic).toBe("minimal-_topic");
       expect(producerInstance.config.useSuppression).toBeUndefined();
     });
   });
@@ -445,7 +445,7 @@ describe("AbstractProducer", () => {
       const status = producerInstance.getStatus();
       expect(status.brokerType).toBe("test-broker");
       expect(status.connected).toBe(false);
-      expect(status.topic).toBe("test-topic");
+      expect(status.topic).toBe("test-_topic");
 
       await producerInstance.connect();
 
@@ -456,7 +456,7 @@ describe("AbstractProducer", () => {
 
     it("should handle status for producer without cache", () => {
       const noCacheConfig = {
-        topic: "no-cache-topic",
+        topic: "no-cache-_topic",
         useSuppression: false,
         useDistributedLock: false,
       };
@@ -478,7 +478,7 @@ describe("AbstractProducer", () => {
 
     it("should provide status with disabled lock", () => {
       const noLockConfig = {
-        topic: "no-lock-topic",
+        topic: "no-lock-_topic",
         useSuppression: true,
         useDistributedLock: false,
       };
@@ -493,7 +493,7 @@ describe("AbstractProducer", () => {
     beforeEach(async () => {
       // Create a producer with the appropriate configuration for suppression tests
       producerInstance = new TestProducer({
-        topic: "test-topic",
+        topic: "test-_topic",
         useSuppression: true,
         useDistributedLock: false,
       });
@@ -524,7 +524,7 @@ describe("AbstractProducer", () => {
 
     it("should work without suppression", async () => {
       const noSuppressionConfig = {
-        topic: "no-supp-topic",
+        topic: "no-supp-_topic",
         useSuppression: false,
         useDistributedLock: true,
         useMonitor: true,
@@ -713,7 +713,7 @@ describe("AbstractProducer", () => {
       const instance = Object.create(AbstractProducerPrototype);
 
       // Initialize just enough to prevent null reference errors
-      instance.config = { topic: "test-topic" };
+      instance.config = { topic: "test-_topic" };
 
       return instance;
     };

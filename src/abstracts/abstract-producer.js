@@ -18,23 +18,27 @@ const DistributedLockService = require("../services/distributed-lock-service");
 const REQUIRED_CONFIG_FIELDS = ["topic"];
 
 class AbstractProducer {
-  #topic;
+  _topic;
+  _cacheLayer;
+  _distributedLockService;
+  _monitorService;
 
-  #cacheLayer;
-  #distributedLockService;
-  #monitorService;
+  _hasConnected;
+  _isShuttingDown;
+  _topicExisted;
 
-  #isConnected;
-  #isShuttingDown;
+  _enabledSuppression;
+  _enabledDistributedLock;
 
-  #enabledSuppression;
-  #enabledDistributedLock;
-
+  /**
+   * Create producer instance with configuration validation and initialization
+   * @param {Object} config Producer configuration including topic and options
+   */
   constructor(config) {
     this.#ensureNotDirectInstantiation();
     this.#validateAndInitialize(config);
     this.#setupGracefulShutdown();
-    this._logConfigurationLoaded();
+    this.#logConfigurationLoaded();
   }
 
   /**
@@ -71,9 +75,10 @@ class AbstractProducer {
   }
 
   #initializeConfiguration(config) {
-    this.#topic = config.topic;
-    this.#enabledSuppression = config.useSuppression;
-    this.#enabledDistributedLock = config.useDistributedLock;
+    this._topic = config.topic;
+    this._enabledSuppression = config.useSuppression;
+    this._enabledDistributedLock = config.useDistributedLock;
+    this._topicExisted = false;
     this.config = config;
   }
 
@@ -87,14 +92,14 @@ class AbstractProducer {
   }
 
   _createDistributedLockService(config) {
-    if (!this.#cacheLayer || !this.#enabledDistributedLock) {
+    if (!this._cacheLayer || !this._enabledDistributedLock) {
       logger.logWarning("Producer distributed lock is disabled");
       return null;
     }
 
     const lockKey = this.#generateLockKey(config?.topic);
     const lockTtl = config?.lockTtlMs || 600000;
-    return new DistributedLockService(lockKey, lockTtl, this.#cacheLayer);
+    return new DistributedLockService(lockKey, lockTtl, this._cacheLayer);
   }
 
   _createMonitorService(_config) {
@@ -103,11 +108,11 @@ class AbstractProducer {
   }
 
   #initializeDependencies(config) {
-    this.#cacheLayer = this._createCacheLayer(config);
-    this.#distributedLockService = this._createDistributedLockService(config);
-    this.#monitorService = this._createMonitorService(config);
-    this.#isShuttingDown = false;
-    this.#isConnected = false;
+    this._cacheLayer = this._createCacheLayer(config);
+    this._distributedLockService = this._createDistributedLockService(config);
+    this._monitorService = this._createMonitorService(config);
+    this._isShuttingDown = false;
+    this._hasConnected = false;
   }
 
   #validateAndInitialize(config) {
@@ -124,15 +129,14 @@ class AbstractProducer {
   }
 
   async #handleGracefulShutdownProducer(signal = "unknown") {
-    console.log(`\n SIGNAL ${signal}`);
-    if (this.#isShuttingDown) {
+    if (this._isShuttingDown) {
       return;
     }
 
     try {
-      this.#isShuttingDown = true;
+      this._isShuttingDown = true;
       logger.logInfo(
-        `⏼ ${this.getBrokerType().toUpperCase()} producer received ${signal} signal, shutting down gracefully`
+        `${this.getBrokerType().toUpperCase()} producer received ${signal} signal, shutting down gracefully`
       );
 
       this.#removeShutdownListeners();
@@ -158,33 +162,39 @@ class AbstractProducer {
     process.on("unhandledRejection", this.#handleGracefulShutdownProducer.bind(this, "unhandledRejection"));
   }
 
-  _logConfigurationLoaded() {
+  #logConfigurationLoaded() {
     logger.logDebug(
-      `🐞${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this.config, null, 2)}`
+      `${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration for topic ${this._topic}`
     );
   }
 
   #isAlreadyConnected() {
-    return this.#isConnected;
+    return this._hasConnected;
   }
 
   async #connectCacheIfAvailable() {
-    if (!this.#cacheLayer) {
+    if (!this._cacheLayer) {
       return;
     }
 
-    await this.#cacheLayer.connect();
-    logger.logInfo(`🔌 ${this.getBrokerType().toUpperCase()} producer connected to cache layer`);
+    await this._cacheLayer.connect();
+    logger.logInfo(`${this.getBrokerType().toUpperCase()} producer connected to cache layer`);
   }
 
   async #connectToMonitorServiceIfAvailable() {
-    if (!this.#monitorService) {
+    if (!this._monitorService) {
       return;
     }
-    await this.#monitorService.connect();
-    logger.logInfo(`ℹ️ ${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`);
+    await this._monitorService.connect();
+    logger.logInfo(`${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`);
   }
 
+  /**
+   * Connect to the message broker - must be implemented by subclasses
+   * @abstract
+   * @returns {Promise<void>}
+   * @throws {Error} When method is not implemented
+   */
   async _connectToMessageBroker() {
     throw new Error("_connectToMessageBroker method must be implemented by subclass");
   }
@@ -196,11 +206,11 @@ class AbstractProducer {
   }
 
   #markAsConnected() {
-    this.#isConnected = true;
+    this._hasConnected = true;
   }
 
   #markAsDisconnected() {
-    this.#isConnected = false;
+    this._hasConnected = false;
   }
 
   /**
@@ -224,14 +234,20 @@ class AbstractProducer {
     }
   }
 
+  /**
+   * Disconnect from the message broker - must be implemented by subclasses
+   * @abstract
+   * @returns {Promise<void>}
+   * @throws {Error} When method is not implemented
+   */
   async _disconnectFromMessageBroker() {
     throw new Error("_disconnectFromMessageBroker method must be implemented by subclass");
   }
 
   async #disconnectCacheIfAvailable() {
     try {
-      await this.#cacheLayer?.disconnect();
-      this.#cacheLayer = null;
+      await this._cacheLayer?.disconnect();
+      this._cacheLayer = null;
       logger.logInfo(`${this.getBrokerType()} producer disconnected from cache layer`);
     } catch (error) {
       logger.logWarning(`Error disconnecting from cache layer`, error);
@@ -240,503 +256,433 @@ class AbstractProducer {
 
   async #disConnectToMonitorServiceIfAvailable() {
     try {
-      await this.#monitorService?.disconnect();
-      this.#monitorService = null;
+      await this._monitorService?.disconnect();
+      this._monitorService = null;
       logger.logInfo(`${this.getBrokerType()} producer disconnected from monitor layer`);
     } catch (error) {
       logger.logWarning(`Error disconnecting from monitor layer`, error);
     }
   }
 
-  async #cleanDistributedLockIfAvailable() {
-    try {
-      await this.#distributedLockService?.release();
-      this.#distributedLockService = null;
-      logger.logInfo(`${this.getBrokerType()} producer stop distributed lock service`);
-    } catch (error) {
-      logger.logWarning(`Error stop distributed lock service`, error);
-    }
-  }
-
   async performDisconnection() {
-    await this._disconnectFromMessageBroker();
     await this.#disconnectCacheIfAvailable();
     await this.#disConnectToMonitorServiceIfAvailable();
-    await this.#cleanDistributedLockIfAvailable();
+    await this._disconnectFromMessageBroker();
   }
 
   /**
    * Disconnects from message broker and cache layer
    * @returns {Promise<void>}
+   * @throws {Error} When disconnection fails
    */
   async disconnect() {
     if (!this.#isAlreadyConnected()) {
-      logger.logWarning(`${this.getBrokerType()} producer is already disconnected`);
+      logger.logWarning(`${this.getBrokerType()} producer is not connected`);
       return;
     }
 
     try {
       await this.performDisconnection();
       this.#markAsDisconnected();
-      logger.logInfo(`${this.getBrokerType()} producer disconnected successfully`);
+      logger.logInfo(`${this.getBrokerType()} producer disconnected`);
     } catch (error) {
       logger.logError(`Error disconnecting ${this.getBrokerType()} producer`, error);
       throw error;
     }
   }
 
-  #ensureConnected() {
-    if (this.#isShuttingDown) {
-      throw new Error(`${this.getBrokerType()} producer is shutting down`);
-    }
+  /**
+   * Check if topic exists in the message broker
+   * @abstract
+   * @returns {Promise<boolean>} True if topic exists
+   */
+  async _isTopicExisted() {
+    throw new Error("_isTopicExisted method must be implemented by subclass");
+  }
 
+  async #ensureTopicExists() {
+    try {
+      this._topicExisted = await this._isTopicExisted();
+      return this._topicExisted;
+    } catch (error) {
+      logger.logWarning(`Error checking if topic ${this._topic} exists`, error);
+      return false;
+    }
+  }
+
+  async #checkTopicExists() {
     if (!this.#isAlreadyConnected()) {
-      throw new Error(`${this.getBrokerType()} producer is not connected`);
+      logger.logWarning(`${this.getBrokerType()} producer is not connected, connecting first`);
+      await this.connect();
     }
+
+    return await this.#ensureTopicExists();
   }
 
-  async #handleExtendedBackpressure() {
+  async #createLock() {
+    if (!this._distributedLockService) {
+      return true;
+    }
+
     try {
-      const status = await this.#monitorService.getBackpressureStatus();
-      const delay = status.recommendedDelay || 1000;
-
-      logger.logWarning(`‼️ Backpressure detected (${status.backpressureLevel}), pausing for ${delay}ms`, {
-        topic: this.#topic,
-        brokerType: this.getBrokerType(),
-        metrics: status.metrics,
-      });
-
-      await new Promise(resolve => setTimeout(resolve, delay));
-
-      const stillInBackpressure = await this.#monitorService.shouldPauseProcessing();
-
-      if (stillInBackpressure) {
-        const newStatus = await this.#monitorService.getBackpressureStatus();
-        logger.logWarning(
-          `‼️ System still under backpressure (${newStatus.backpressureLevel}) after waiting ${delay}ms`,
-          {
-            topic: this.#topic,
-            brokerType: this.getBrokerType(),
-            metrics: newStatus.metrics,
-          }
-        );
-        return true;
+      const lockResult = await this._distributedLockService.acquire();
+      if (lockResult) {
+        logger.logDebug(`${this.getBrokerType()} producer acquired distributed lock for topic ${this._topic}`);
       } else {
-        return false;
+        logger.logWarning(
+          `${this.getBrokerType()} producer failed to acquire distributed lock for topic ${this._topic}`
+        );
       }
+      return lockResult;
     } catch (error) {
-      logger.logWarning("Error handling extended backpressure", error);
-      return true;
+      logger.logWarning(`Error acquiring distributed lock for topic ${this._topic}`, error);
+      return false;
     }
   }
 
-  async #isMessageBrokerUnderPressure() {
-    if (!this.#monitorService) {
+  async #releaseLock() {
+    if (!this._distributedLockService) {
+      return true;
+    }
+
+    try {
+      const releaseResult = await this._distributedLockService.release();
+      if (releaseResult) {
+        logger.logDebug(`${this.getBrokerType()} producer released distributed lock for topic ${this._topic}`);
+      } else {
+        logger.logWarning(
+          `${this.getBrokerType()} producer failed to release distributed lock for topic ${this._topic}`
+        );
+      }
+      return releaseResult;
+    } catch (error) {
+      logger.logWarning(`Error releasing distributed lock for topic ${this._topic}`, error);
+      return false;
+    }
+  }
+
+  async #handleBackpressure(options = {}) {
+    if (!this._monitorService || !options?.respectBackpressure) {
       return false;
     }
 
     try {
-      const shouldPause = await this.#monitorService.shouldPauseProcessing();
-      if (shouldPause) {
-        return await this.#handleExtendedBackpressure();
+      const backpressureResult = await this._monitorService.shouldThrottleProduction();
+      if (backpressureResult) {
+        const { reason, lagDetails } = backpressureResult;
+        logger.logWarning(
+          `${this.getBrokerType()} producer backpressure detected for topic ${
+            this._topic
+          }: ${reason}, lag details: ${JSON.stringify(lagDetails)}`
+        );
       }
+      return backpressureResult?.shouldThrottle || false;
+    } catch (error) {
+      logger.logWarning(`Error checking backpressure for topic ${this._topic}`, error);
       return false;
-    } catch (error) {
-      logger.logWarning("Error checking backpressure status", error);
-      return true;
-    }
-  }
-
-  async #getProcessingIds() {
-    if (!this.#cacheLayer) {
-      return [];
-    }
-
-    try {
-      return await this.#cacheLayer.getProcessingIds();
-    } catch (error) {
-      logger.logWarning("Failed to get processing IDs from cache", error);
-      return [];
-    }
-  }
-
-  async #getSuppressedIds() {
-    if (!this.#cacheLayer) {
-      return [];
-    }
-
-    try {
-      return await this.#cacheLayer.getSuppressedIds();
-    } catch (error) {
-      logger.logWarning("Failed to get freezing IDs from cache", error);
-      return [];
-    }
-  }
-
-  #isSuppressionFullyEnabled() {
-    return this.#cacheLayer && this.#enabledSuppression;
-  }
-
-  async #getExcludedIds() {
-    try {
-      const hardExclusions = await this.#getProcessingIds();
-      const softExclusions = this.#isSuppressionFullyEnabled() ? await this.#getSuppressedIds() : [];
-      return [...new Set([...hardExclusions, ...softExclusions])];
-    } catch (error) {
-      logger.logWarning("Failed to get excluded IDs, continuing without exclusions", error);
-      return [];
     }
   }
 
   /**
-   * Gets next batch of items to process based on criteria
-   * @param {Object} criteria Query criteria for items
-   * @param {number} limit Maximum number of items to fetch
-   * @param {Array<string>} excludedIds IDs to exclude from results
-   * @returns {Promise<Array<Object>>} Items to process
+   * Get next items to be processed
+   * @param {Object} _criteria Query criteria for fetching items
+   * @param {number} _limit Maximum number of items to fetch
+   * @param {Array<string>} _excludedIds IDs to exclude from query
+   * @returns {Promise<Array<Object>>} Array of items to be processed
    */
   async getNextItems(_criteria, _limit, _excludedIds) {
     throw new Error("getNextItems method must be implemented by subclass");
   }
 
-  #itemNotFound(items) {
-    return !items || items.length === 0;
+  async #getItemsToProcess(criteria, limit, options = {}) {
+    const excludedIds = options?.excludedIds || [];
+    const items = await this.getNextItems(criteria, limit, excludedIds);
+
+    if (!items || items.length === 0) {
+      logger.logDebug(`${this.getBrokerType()} producer found no items to process for topic ${this._topic}`);
+      return [];
+    }
+
+    logger.logDebug(`${this.getBrokerType()} producer found ${items.length} items to process for topic ${this._topic}`);
+    return items;
   }
 
-  #creatEmptyResult() {
-    return {
-      success: true,
-      messageType: this.getMessageType(),
-      total: 0,
-      sent: 0,
-      skipped: 0,
-      error: null,
-      itemIds: [],
-      details: {
-        topic: this.#topic,
-        brokerType: this.getBrokerType(),
-        timestamp: Date.now(),
-        reason: "no_items_found",
-      },
-    };
+  async #isTopicPrimaryProducer(options = {}) {
+    if (!this._enabledDistributedLock) {
+      return true;
+    }
+
+    if (options?.skipLock) {
+      logger.logDebug(`${this.getBrokerType()} producer skipping lock for topic ${this._topic}`);
+      return true;
+    }
+
+    return await this.#createLock();
   }
 
-  async #markItemAsSuppressed(items) {
-    try {
-      if (!this.#cacheLayer) {
-        return;
-      }
-      for (const item of items) {
-        await this.#cacheLayer.markAsSuppressed(this.getItemId(item));
-      }
-    } catch (error) {
-      logger.logError(
-        `Producer failed to send suppressed messages, aware of duplication will be appeared faster than excepted.`,
-        error
-      );
+  async #cleanUpAfterProducing(options = {}) {
+    if (this._enabledDistributedLock && !options?.skipLock) {
+      await this.#releaseLock();
     }
   }
 
   /**
-   * Gets the item ID from an item object
-   * @param {Object} item Item to get ID from
-   * @returns {string} Unique item identifier
+   * Get unique identifier for the item
+   * @param {Object} item Message item
+   * @returns {string} Unique identifier
    */
   getItemId(item) {
-    throw new Error("getItemId method must be implemented by subclass");
+    return item.id || item._id || item.key || JSON.stringify(item);
   }
 
   /**
-   * Gets the message key for an item
-   * @param {Object} item Item to get key from
+   * Get message key for the broker
+   * @param {Object} item Message item
    * @returns {string} Message key
    */
   getMessageKey(item) {
     return this.getItemId(item);
   }
 
+  /**
+   * Create broker-specific messages from items
+   * @abstract
+   * @param {Array<Object>} _items Items to convert to broker messages
+   * @returns {Array<Object>} Broker-specific message objects
+   */
   _createBrokerMessages(_items) {
     throw new Error("_createBrokerMessages method must be implemented by subclass");
   }
 
+  /**
+   * Send messages to the broker
+   * @abstract
+   * @param {Array<Object>} _messages Broker-specific message objects
+   * @param {Object} _options Send options
+   * @returns {Promise<Object>} Result of send operation
+   */
   async _sendMessagesToBroker(_messages, _options) {
     throw new Error("_sendMessagesToBroker method must be implemented by subclass");
   }
 
-  async #acquireLock(waitTime) {
-    if (!this.#distributedLockService) {
-      return true;
-    }
-
-    try {
-      return await this.#distributedLockService.acquire(waitTime);
-    } catch (error) {
-      logger.logError(`Error acquiring lock for ${this.getBrokerType()} producer`, error);
-      return false;
-    }
-  }
-
-  _skipMessagesSending(envelopedMessages) {
-    const skippedCount = envelopedMessages.length;
-    logger.logWarning(
-      `Skipped sending ${skippedCount} messages to ${this.getBrokerType()} broker lock acquisition failure)`
-    );
-
-    return {
-      success: true,
-      sent: 0,
-      skipped: skippedCount,
-      error: null,
-      details: {
-        reason: "lock_timeout",
-      },
-    };
-  }
-
-  async #releaseLock() {
-    try {
-      return await this.#distributedLockService?.release();
-    } catch (error) {
-      logger.logWarning(`Error releasing lock for ${this.getBrokerType()} producer`, error);
-      return false;
-    }
-  }
-
-  async #sendItemToBrokerWithoutLock(items, options = {}) {
-    try {
-      if (this.#isSuppressionFullyEnabled()) {
-        await this.#markItemAsSuppressed(items);
-      }
-      const messages = this._createBrokerMessages(items);
-      const sendResult = await this._sendMessagesToBroker(messages, options);
-      logger.logInfo(`Successfully sent ${messages.length} messages to ${this.getBrokerType()} broker`);
+  async #filterAlreadySentItems(items) {
+    if (!this._cacheLayer || !this._enabledSuppression) {
       return {
-        success: true,
-        sent: messages.length,
-        skipped: 0,
-        error: null,
-        details: sendResult || {},
+        filteredItems: items,
+        skippedItems: [],
       };
-    } catch (error) {
-      logger.logError(`Failed to send messages to ${this.getBrokerType()} broker`, error);
-      throw error;
-    }
-  }
-
-  async #retryWithExponentialBackoff(messages, options = {}) {
-    const maxRetries = options.maxRetries || 3;
-    const currentRetry = options.currentRetry || 0;
-
-    if (currentRetry >= maxRetries) {
-      throw new Error(`Max retries (${maxRetries}) exceeded for ${this.getBrokerType()} producer`);
     }
 
-    const baseDelay = options?.baseDelay || 1000;
-    const delay = baseDelay * Math.pow(2, currentRetry);
+    const filteredItems = [];
+    const skippedItems = [];
 
-    logger.logInfo(`Retrying message send after ${delay}ms (attempt ${currentRetry + 1}/${maxRetries})`);
+    for (const item of items) {
+      const itemId = this.getItemId(item);
+      const cacheKey = `${this._topic}-${itemId}`;
 
-    await new Promise(resolve => setTimeout(resolve, delay));
-
-    const retryOptions = {
-      ...options,
-      currentRetry: currentRetry + 1,
-    };
-
-    return await this.#sendItemsToBroker(messages, retryOptions);
-  }
-
-  async #handleLockAcquisitionFailure(items, options = {}) {
-    logger.logWarning(`Failed to acquire lock for ${this.getBrokerType()} producer`);
-
-    if (options?.failOnLockTimeout) {
-      throw new Error(`Failed to acquire lock for ${this.getBrokerType()} producer`);
-    }
-
-    if (options?.skipOnLockTimeout) {
-      return this._skipMessagesSending(items);
-    }
-
-    if (options?.ignoreLocksAndSend) {
-      const skipLockOptions = { ...options, skipLock: true };
-      return await this.#sendItemToBrokerWithoutLock(items, skipLockOptions);
-    }
-
-    return await this.#retryWithExponentialBackoff(items, options);
-  }
-
-  async #sendItemToBrokerWithLock(items, options = {}) {
-    const waitTime = options?.lockWaitTime || 5000;
-
-    try {
-      const lockAcquired = await this.#acquireLock(waitTime);
-
-      if (!lockAcquired) {
-        return this.#handleLockAcquisitionFailure(items, options);
-      }
       try {
-        return await this.#sendItemToBrokerWithoutLock(items, options);
-      } catch (e) {
-        logger.logWarning("⚠️ Producer failed to send message to Broker", e);
-        return {
-          success: false,
-          sent: 0,
-          skipped: items.length,
-          error: e,
-          details: {
-            reason: "broker_send_error",
-            errorMessage: e.message,
-          },
-        };
-      } finally {
-        await this.#releaseLock();
+        const isSent = await this._cacheLayer.get(cacheKey);
+        if (isSent) {
+          skippedItems.push(item);
+        } else {
+          filteredItems.push(item);
+        }
+      } catch (error) {
+        logger.logWarning(`Error checking if item ${itemId} was already sent, including it anyway`, error);
+        filteredItems.push(item);
       }
-    } catch (error) {
-      if (options?.skipRetries) {
-        throw error;
-      }
-
-      return this.#retryWithExponentialBackoff(items, options);
     }
-  }
-
-  async #sendItemsToBroker(items, options = {}) {
-    this.#ensureConnected();
-    if (this.#distributedLockService) {
-      return await this.#sendItemToBrokerWithLock(items, options);
-    } else {
-      return await this.#sendItemToBrokerWithoutLock(items, options);
-    }
-  }
-
-  #validateItems(items) {
-    if (!Array.isArray(items) || items.length === 0) {
-      throw new Error("Items must be a non-empty array");
-    }
-  }
-
-  getMessageType() {
-    throw new Error("getMessageType method must be implemented by subclass");
-  }
-
-  #buildProcessingResult(items, sendResult) {
-    const { success, sent, skipped, error, details } = sendResult;
-
-    const itemIds = items.map(item => this.getItemId(item));
 
     return {
-      success,
-      messageType: this.getMessageType(),
-      total: items.length,
-      sent,
-      skipped,
-      error: error ? error.message : null,
-      itemIds,
-      items: this.config?.includeItems ? items : undefined,
-      details: {
-        topic: this.#topic,
-        brokerType: this.getBrokerType(),
-        timestamp: Date.now(),
-        ...details,
-      },
+      filteredItems,
+      skippedItems,
     };
   }
 
-  async #processItems(items, options = {}) {
-    this.#validateItems(items);
-    const sendResult = await this.#sendItemsToBroker(items, options);
-    return this.#buildProcessingResult(items, sendResult);
-  }
-
-  #logProductionSuccess(result) {
-    const { sent, skipped, total } = result;
-
-    if (total === 0) {
-      logger.logInfo(`No ${this.getMessageType()} items found for processing`);
+  async #markItemsAsSent(items) {
+    if (!this._cacheLayer || !this._enabledSuppression) {
       return;
     }
 
-    logger.logInfo(`Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this.#topic} topic`);
+    const promises = items.map(async item => {
+      const itemId = this.getItemId(item);
+      const cacheKey = `${this._topic}-${itemId}`;
+
+      try {
+        await this._cacheLayer.set(cacheKey, "sent", { ttl: 86400 }); // 24 hours
+      } catch (error) {
+        logger.logWarning(`Error marking item ${itemId} as sent`, error);
+      }
+    });
+
+    await Promise.all(promises);
+  }
+
+  async #processItemsAndSendToBroker(items, options) {
+    const { filteredItems, skippedItems } = await this.#filterAlreadySentItems(items);
+
+    if (filteredItems.length === 0) {
+      logger.logInfo(
+        `${this.getBrokerType()} producer skipping all ${skippedItems.length} items for topic ${
+          this._topic
+        }, already sent`
+      );
+      return {
+        sent: false,
+        totalMessages: items.length,
+        sentMessages: 0,
+        skippedMessages: skippedItems.length,
+        deduplicatedMessages: 0,
+      };
+    }
+
+    const messages = this._createBrokerMessages(filteredItems);
+    const result = await this._sendMessagesToBroker(messages, options);
+    await this.#markItemsAsSent(filteredItems);
+
+    return {
+      ...result,
+      totalMessages: items.length,
+      skippedMessages: skippedItems.length,
+    };
+  }
+
+  async #processAndProduceMessages(criteria, limit, options = {}) {
+    if (await this.#handleBackpressure(options)) {
+      logger.logWarning(`${this.getBrokerType()} producer throttling due to backpressure for topic ${this._topic}`);
+      return {
+        sent: false,
+        totalMessages: 0,
+        sentMessages: 0,
+        skippedMessages: 0,
+        deduplicatedMessages: 0,
+        backpressureDetected: true,
+      };
+    }
+
+    const items = await this.#getItemsToProcess(criteria, limit, options);
+    if (items.length === 0) {
+      return {
+        sent: false,
+        totalMessages: 0,
+        sentMessages: 0,
+        skippedMessages: 0,
+        deduplicatedMessages: 0,
+      };
+    }
+
+    return await this.#processItemsAndSendToBroker(items, options);
   }
 
   /**
-   * Produces messages based on item criteria
-   * @param {Object} criteria Query criteria for items
-   * @param {number} limit Maximum number of items to process
-   * @param {Object} options Production options
-   * @returns {Promise<Object>} Production result with counts and details
+   * Get the message type (usually topic name)
+   * @returns {string} Message type identifier
+   */
+  getMessageType() {
+    return this._topic;
+  }
+
+  async #handleProduceError(criteria, limit, options, error) {
+    const loggingOptions = {
+      criteria,
+      limit,
+      topic: this._topic,
+      options,
+    };
+
+    logger.logError(`${this.getBrokerType()} producer failed to produce messages`, {
+      error,
+      options: loggingOptions,
+    });
+
+    return {
+      sent: false,
+      error: error.message,
+      totalMessages: 0,
+      sentMessages: 0,
+      skippedMessages: 0,
+      deduplicatedMessages: 0,
+      errorDetails: error,
+    };
+  }
+
+  async #ensureConnectionAndTopic() {
+    if (!this.#isAlreadyConnected()) {
+      await this.connect();
+    }
+
+    if (!this._topicExisted) {
+      await this.#checkTopicExists();
+    }
+  }
+
+  /**
+   * Produce messages to the broker
+   * @param {Object} criteria Query criteria for fetching items
+   * @param {number} limit Maximum number of items to produce
+   * @param {Object} options Additional options for production
+   * @returns {Promise<Object>} Result of production operation
    */
   async produce(criteria, limit, options = {}) {
     try {
-      this.#ensureConnected();
-      const isUnderPressure = await this.#isMessageBrokerUnderPressure();
-      if (isUnderPressure) {
-        logger.logWarning("☢️ System is under pressure, stop sending new items");
-        return this.#creatEmptyResult();
-      }
-      const excludedIds = await this.#getExcludedIds();
-      const items = await this.getNextItems(criteria, limit, excludedIds);
-      if (this.#itemNotFound(items)) {
-        return this.#creatEmptyResult();
+      await this.#ensureConnectionAndTopic();
+
+      const isPrimaryProducer = await this.#isTopicPrimaryProducer(options);
+      if (!isPrimaryProducer) {
+        logger.logWarning(`${this.getBrokerType()} producer is not primary for topic ${this._topic}`);
+        return {
+          sent: false,
+          totalMessages: 0,
+          sentMessages: 0,
+          skippedMessages: 0,
+          deduplicatedMessages: 0,
+          notPrimary: true,
+        };
       }
 
-      const result = await this.#processItems(items, options);
-      this.#logProductionSuccess(result);
-
+      const result = await this.#processAndProduceMessages(criteria, limit, options);
       return result;
     } catch (error) {
-      logger.logError(`Failed to produce messages to ${this.#topic} topic`, error);
-      throw error;
+      return await this.#handleProduceError(criteria, limit, options, error);
+    } finally {
+      await this.#cleanUpAfterProducing(options);
     }
   }
 
-  #isCacheConnected() {
-    return this.#cacheLayer ? this.#cacheLayer.isConnected() : false;
-  }
-
+  /**
+   * Get producer configuration for status reporting
+   * @returns {Object} Producer configuration object
+   */
   _getStatusConfig() {
     return {
-      enabledSuppression: this.#isSuppressionFullyEnabled(),
-      enabledDistributedLock: this.#enabledDistributedLock && Boolean(this.#distributedLockService),
-      enabledBackpressure: Boolean(this.#monitorService),
-      enabledCache: Boolean(this.#cacheLayer),
-    };
-  }
-
-  #getLockStatus() {
-    if (!this.#distributedLockService) {
-      return { enabled: false };
-    }
-
-    return {
-      enabled: true,
-      key: this.#distributedLockService.getLockKey(),
-      ttl: this.#distributedLockService.getLockTtl(),
+      broker: this.getBrokerType(),
+      topic: this._topic,
+      connected: this._hasConnected,
+      topicExists: this._topicExisted,
+      suppressionEnabled: this._enabledSuppression,
+      distributedLockEnabled: this._enabledDistributedLock,
+      monitorEnabled: this._monitorService !== null,
+      cacheEnabled: this._cacheLayer !== null,
     };
   }
 
   /**
-   * Gets producer status information
-   * @returns {Promise<Object>} Status object with connection and configuration details
+   * Get producer status information
+   * @returns {Object} Producer status object
    */
   getStatus() {
     return {
-      brokerType: this.getBrokerType(),
-      connected: this.#isAlreadyConnected(),
-      cacheConnected: this.#isCacheConnected(),
-      topic: this.#topic,
-      enabledSuppression: this.#isSuppressionFullyEnabled(),
-      config: this._getStatusConfig(),
-      lock: this.#getLockStatus(),
+      ...this._getStatusConfig(),
+      status: this._isShuttingDown ? "shutting_down" : this._hasConnected ? "connected" : "disconnected",
     };
   }
 
   /**
-   * Gets the backpressure monitor instance
-   * @returns {Object|null} Backpressure monitor
+   * Get the backpressure monitor service if available
+   * @returns {Object|null} Backpressure monitor service or null
    */
   getBackpressureMonitor() {
-    return this.#monitorService;
+    return this._monitorService;
   }
 }
 

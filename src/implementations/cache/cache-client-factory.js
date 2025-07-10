@@ -5,22 +5,26 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Cache Factory for creating cache layer implementations
+ * Cache Client Factory
  *
- * Supports Redis, Memcached, in-memory cache with fallback mechanisms and configuration validation.
+ * Factory pattern implementation for creating and configuring cache clients.
+ * Supports different cache implementations with automatic fallback mechanisms,
+ * configuration validation, and standardized interfaces. Currently supports
+ * Redis with planned support for Memcached and in-memory cache options.
  */
 const logger = require("../../services/logger-service");
+const RedisCacheClient = require("./redis-cache-client");
 
 class CacheClientFactory {
   /**
    * Creates a cache client instance based on configuration
-   * @param {Object} config - Cache configuration object
-   * @param {string} config.implementation - Cache implementation type ('redis', 'memcached', 'memory')
-   * @param {string} config.keyPrefix - Key prefix for organization
-   * @param {number} config.processingTtl - Processing key TTL in milliseconds
-   * @param {number} config.sentTtl - Sent message TTL in milliseconds
-   * @param {Object} config.connectionOptions - Implementation-specific connection options
-   * @returns {AbstractCache} Cache layer instance
+   * @param {Object} config Cache configuration object
+   * @param {string} config.implementation Cache implementation type ('redis', 'memcached', 'memory')
+   * @param {string} config.keyPrefix Key prefix for organization
+   * @param {number} config.processingTtl Processing key TTL in milliseconds
+   * @param {number} config.sentTtl Sent message TTL in milliseconds
+   * @param {Object} config.connectionOptions Implementation-specific connection options
+   * @returns {RedisCacheClient} Cache layer instance
    * @throws {Error} When cache creation fails or configuration is invalid
    */
   static createClient(config = {}) {
@@ -61,25 +65,11 @@ class CacheClientFactory {
     }
   }
 
-  /**
-   * Resolve cache implementation from config and environment
-   * @param {Object} config - Configuration object
-   * @returns {string} Implementation type
-   * @private
-   */
   static _resolveImplementation(config) {
-    return config.implementation || process.env.JO_CACHE_IMPLEMENTATION || "redis";
+    return config.implementation || process.env.MO_CACHE_IMPLEMENTATION || "redis";
   }
 
-  /**
-   * Create Redis cache client
-   * @param {Object} config - Configuration object
-   * @returns {RedisCacheClient} Redis cache layer instance
-   * @private
-   */
   static _createRedisClient(config) {
-    const RedisCacheClient = require("./redis-cache-client");
-
     try {
       return new RedisCacheClient({
         ...config,
@@ -91,15 +81,7 @@ class CacheClientFactory {
     }
   }
 
-  /**
-   * Create Memcached client
-   * @param {Object} config - Configuration object
-   * @returns {MemcachedCacheClient} Memcached cache layer instance
-   * @private
-   */
   static _createMemcachedClient(config) {
-    const MemcachedCacheClient = require("./memcached-cache-client");
-
     try {
       return new MemcachedCacheClient({
         ...config,
@@ -111,12 +93,6 @@ class CacheClientFactory {
     }
   }
 
-  /**
-   * Create Memory cache client
-   * @param {Object} config - Configuration object
-   * @returns {MemoryCacheClient} Memory cache layer instance
-   * @private
-   */
   static _createMemoryClient(config) {
     const MemoryCacheClient = require("./memory-cache-client");
 
@@ -176,12 +152,6 @@ class CacheClientFactory {
     }
   }
 
-  /**
-   * Validate TTL value
-   * @param {any} ttl - TTL value to validate
-   * @param {string} fieldName - Name of the field for error messages
-   * @private
-   */
   static _validateTtl(ttl, fieldName) {
     if (typeof ttl !== "number" || ttl <= 0 || !Number.isInteger(ttl)) {
       throw new Error(`Cache ${fieldName} must be a positive integer (milliseconds)`);
@@ -222,7 +192,7 @@ class CacheClientFactory {
    */
   static getDefaultConfig(implementation = "redis") {
     const baseConfig = {
-      keyPrefix: "JO_DEFAULT",
+      keyPrefix: "MO_DEFAULT",
       processingTtl: 10 * 1000,
       sentTtl: 20 * 1000,
       retryOptions: {
@@ -254,15 +224,14 @@ class CacheClientFactory {
       memory: {
         implementation: "memory",
         connectionOptions: {
-          maxSize: 1000,
-          defaultTtl: 3600 * 1000,
+          maxItems: 1000,
         },
       },
     };
 
     return {
       ...baseConfig,
-      ...implementationDefaults[implementation.toLowerCase()],
+      ...(implementationDefaults[implementation.toLowerCase()] || implementationDefaults.redis),
     };
   }
 }

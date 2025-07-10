@@ -8,7 +8,7 @@
  * Kafka Manager
  *
  * Comprehensive manager for Kafka operations including:
- * - Client, producer, consumer and admin creation
+ * - Client, producer, #consumer and admin creation
  * - Configuration management with smart defaults
  * - Utility methods for message handling
  * - Monitoring and performance tools
@@ -16,19 +16,13 @@
 const { Kafka, CompressionTypes, Partitioners } = require("kafkajs");
 const logger = require("../../../services/logger-service");
 const TTLConfig = require("../../../config/ttl-config");
+const { Logger } = require("winston");
 
-// Load Kafka-specific TTL values
 const KAFKA_TTL_CONFIG = TTLConfig.getKafkaConfig();
 
 class KafkaManager {
   /**
-   * ========================================
-   * CONFIGURATION DEFAULTS
-   * ========================================
-   */
-
-  /**
-   * Default topic configuration values
+   * Default _topic configuration values
    */
   static get TOPIC_DEFAULTS() {
     return {
@@ -46,43 +40,43 @@ class KafkaManager {
    */
   static get CLIENT_DEFAULTS() {
     return {
-      clientId: process.env.JO_KAFKA_CLIENT_ID || `job-orchestrator-${new Date().getTime()}`,
-      brokers: process.env.JO_KAFKA_BROKERS?.split(",") || ["localhost:9092"],
+      clientId: process.env.MO_KAFKA_CLIENT_ID || `job-orchestrator-${new Date().getTime()}`,
+      brokers: process.env.MO_KAFKA_BROKERS?.split(",") || ["localhost:9092"],
       connectionTimeout: KAFKA_TTL_CONFIG.connectionTimeout,
       requestTimeout: KAFKA_TTL_CONFIG.requestTimeout,
-      enforceRequestTimeout: process.env.JO_KAFKA_ENFORCE_REQUEST_TIMEOUT !== "false",
+      enforceRequestTimeout: process.env.MO_KAFKA_ENFORCE_REQUEST_TIMEOUT !== "false",
       retry: {
-        initialRetryTime: parseInt(process.env.JO_KAFKA_INITIAL_RETRY_TIME_MS) || 100,
-        retries: parseInt(process.env.JO_KAFKA_RETRY_COUNT) || 10,
+        initialRetryTime: parseInt(process.env.MO_KAFKA_INITIAL_RETRY_TIME_MS) || 100,
+        retries: parseInt(process.env.MO_KAFKA_RETRY_COUNT) || 10,
         factor: 0.2,
         multiplier: 2,
-        maxRetryTime: parseInt(process.env.JO_KAFKA_MAX_RETRY_TIME_MS) || 30000,
+        maxRetryTime: parseInt(process.env.MO_KAFKA_MAX_RETRY_TIME_MS) || 30000,
       },
     };
   }
 
   /**
-   * Default Kafka consumer configuration
+   * Default Kafka #consumer configuration
    */
   static get CONSUMER_DEFAULTS() {
     const ttlValues = TTLConfig.getAllTTLValues();
 
     return {
-      sessionTimeout: parseInt(process.env.JO_KAFKA_CONSUMER_SESSION_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL,
+      sessionTimeout: parseInt(process.env.MO_KAFKA_CONSUMER_SESSION_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL,
       rebalanceTimeout:
-        parseInt(process.env.JO_KAFKA_CONSUMER_REBALANCE_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL * 2,
+        parseInt(process.env.MO_KAFKA_CONSUMER_REBALANCE_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL * 2,
       heartbeatInterval:
-        parseInt(process.env.JO_KAFKA_CONSUMER_HEARTBEAT_INTERVAL) || ttlValues.TASK_PROCESSING_STATE_TTL / 10,
-      maxBytesPerPartition: parseInt(process.env.JO_KAFKA_CONSUMER_MAX_BYTES_PER_PARTITION) || 1048576,
-      minBytes: parseInt(process.env.JO_KAFKA_CONSUMER_MIN_BYTES) || 1,
-      maxBytes: parseInt(process.env.JO_KAFKA_CONSUMER_MAX_BYTES) || 10485760,
+        parseInt(process.env.MO_KAFKA_CONSUMER_HEARTBEAT_INTERVAL) || ttlValues.TASK_PROCESSING_STATE_TTL / 10,
+      maxBytesPerPartition: parseInt(process.env.MO_KAFKA_CONSUMER_MAX_BYTES_PER_PARTITION) || 1048576,
+      minBytes: parseInt(process.env.MO_KAFKA_CONSUMER_MIN_BYTES) || 1,
+      maxBytes: parseInt(process.env.MO_KAFKA_CONSUMER_MAX_BYTES) || 10485760,
       maxWaitTimeInMs:
-        parseInt(process.env.JO_KAFKA_CONSUMER_MAX_WAIT_TIME_MS) || KAFKA_TTL_CONFIG.connectionTimeout * 5,
-      allowAutoTopicCreation: process.env.JO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
-      autoCommit: process.env.JO_KAFKA_CONSUMER_AUTO_COMMIT === "true",
-      autoCommitInterval: parseInt(process.env.JO_KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL) || 5000,
-      fromBeginning: process.env.JO_KAFKA_CONSUMER_FROM_BEGINNING !== "false",
-      maxInFlightRequests: parseInt(process.env.JO_KAFKA_CONSUMER_MAX_IN_FLIGHT_REQUESTS) || 1,
+        parseInt(process.env.MO_KAFKA_CONSUMER_MAX_WAIT_TIME_MS) || KAFKA_TTL_CONFIG.connectionTimeout * 5,
+      allowAutoTopicCreation: process.env.MO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
+      autoCommit: process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT === "true",
+      autoCommitInterval: parseInt(process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL) || 5000,
+      fromBeginning: process.env.MO_KAFKA_CONSUMER_FROM_BEGINNING !== "false",
+      maxInFlightRequests: parseInt(process.env.MO_KAFKA_CONSUMER_MAX_IN_FLIGHT_REQUESTS) || 1,
     };
   }
 
@@ -92,30 +86,24 @@ class KafkaManager {
   static get PRODUCER_DEFAULTS() {
     return {
       createPartitioner: Partitioners.LegacyPartitioner,
-      acks: parseInt(process.env.JO_KAFKA_PRODUCER_ACKS) || -1,
-      timeout: parseInt(process.env.JO_KAFKA_PRODUCER_TIMEOUT) || KAFKA_TTL_CONFIG.requestTimeout,
-      compression: KafkaManager.getCompressionType(process.env.JO_KAFKA_COMPRESSION_TYPE) || CompressionTypes.None,
-      idempotent: process.env.JO_KAFKA_PRODUCER_IDEMPOTENT === "true",
-      maxInFlightRequests: parseInt(process.env.JO_KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS) || 5,
-      allowAutoTopicCreation: process.env.JO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
+      acks: parseInt(process.env.MO_KAFKA_PRODUCER_ACKS) || -1,
+      timeout: parseInt(process.env.MO_KAFKA_PRODUCER_TIMEOUT) || KAFKA_TTL_CONFIG.requestTimeout,
+      compression: KafkaManager.getCompressionType(process.env.MO_KAFKA_COMPRESSION_TYPE) || CompressionTypes.None,
+      idempotent: process.env.MO_KAFKA_PRODUCER_IDEMPOTENT === "true",
+      maxInFlightRequests: parseInt(process.env.MO_KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS) || 5,
+      allowAutoTopicCreation: process.env.MO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
       transactionTimeout:
-        parseInt(process.env.JO_KAFKA_PRODUCER_TRANSACTION_TIMEOUT) || KAFKA_TTL_CONFIG.requestTimeout * 2,
-      retries: parseInt(process.env.JO_KAFKA_PRODUCER_RETRIES) || 10,
+        parseInt(process.env.MO_KAFKA_PRODUCER_TRANSACTION_TIMEOUT) || KAFKA_TTL_CONFIG.requestTimeout * 2,
+      retries: parseInt(process.env.MO_KAFKA_PRODUCER_RETRIES) || 10,
       retry: {
         initialRetryTime: 300,
-        retries: parseInt(process.env.JO_KAFKA_PRODUCER_RETRIES) || 10,
+        retries: parseInt(process.env.MO_KAFKA_PRODUCER_RETRIES) || 10,
         factor: 0.2,
         multiplier: 2,
         maxRetryTime: 30000,
       },
     };
   }
-
-  /**
-   * ========================================
-   * CLIENT CREATION METHODS
-   * ========================================
-   */
 
   /**
    * Create a Kafka client instance
@@ -165,11 +153,11 @@ class KafkaManager {
   }
 
   /**
-   * Create a Kafka consumer instance
+   * Create a Kafka #consumer instance
    * @param {Object} client - Existing Kafka client (optional)
    * @param {Object} clientOptions - Kafka client options (used if no client provided)
    * @param {Object} consumerOptions - Consumer-specific options
-   * @returns {Object} Kafka consumer instance
+   * @returns {Object} Kafka #consumer instance
    */
   static createConsumer(client, clientOptions, consumerOptions) {
     if (!client && !clientOptions) {
@@ -179,11 +167,17 @@ class KafkaManager {
     return kafkaClient.consumer(consumerOptions);
   }
 
-  /**
-   * ========================================
-   * CONFIGURATION MANAGEMENT
-   * ========================================
-   */
+  static async isTopicExisted(admin, topic) {
+    try {
+      const metadata = await admin.fetchTopicMetadata({
+        topics: [topic],
+      });
+      return metadata.topics.some(x => x.name === topic);
+    } catch (error) {
+      logger.logWarning(`📢 Topic ${topic} not found: ${error.message}`);
+      return false;
+    }
+  }
 
   /**
    * Get compression type enum value from string
@@ -228,16 +222,16 @@ class KafkaManager {
   /**
    * Merge Kafka configuration with smart defaults
    * @param {Object} userConfig - User provided configuration
-   * @param {string} userConfig.topic - The Kafka topic name
-   * @param {string} [userConfig.groupId] - The consumer group ID (required for consumers)
+   * @param {string} userConfig._topic - The Kafka _topic name
+   * @param {string} [userConfig.#groupId] - The #consumer group ID (required for consumers)
    * @param {Object} [userConfig.brokerOptions] - Broker configuration options
-   * @param {Object} [userConfig.brokerOptions.clientOptions] - Kafka client connection options
+   * @param {Object} [userConfig.brokerOptions.#clientOptions] - Kafka client connection options
    * @param {Object} [userConfig.brokerOptions.producerOptions] - Producer-specific options
-   * @param {Object} [userConfig.brokerOptions.consumerOptions] - Consumer-specific options
+   * @param {Object} [userConfig.brokerOptions.#consumerOptions] - Consumer-specific options
    * @param {boolean} [userConfig.useSuppression] - Whether to use message suppression
    * @param {boolean} [userConfig.useDistributedLock] - Whether to use distributed lock
    * @param {Object} [userConfig.cacheOptions] - Cache configuration options
-   * @param {string} type - Component type ('consumer' or 'producer')
+   * @param {string} type - Component type ('#consumer' or 'producer')
    * @returns {Object} Standardized configuration with all required options
    */
   static standardizeConfig(userConfig = {}, type) {
@@ -271,7 +265,7 @@ class KafkaManager {
 
     if (type === "consumer") {
       standardizeConfig.maxConcurrency =
-        userConfig.maxConcurrency || parseInt(process.env.JO_MAX_CONCURRENT_MESSAGES) || 1;
+        userConfig.maxConcurrency || parseInt(process.env.MO_MAX_CONCURRENT_MESSAGES) || 1;
       standardizeConfig.consumerOptions = {
         groupId: userConfig.groupId,
         ...this.CONSUMER_DEFAULTS,
@@ -291,12 +285,6 @@ class KafkaManager {
 
     return standardizeConfig;
   }
-
-  /**
-   * ========================================
-   * MESSAGE HANDLING UTILITIES
-   * ========================================
-   */
 
   /**
    * Parse message content safely
@@ -363,7 +351,7 @@ class KafkaManager {
    */
 
   /**
-   * Calculate consumer lag for a topic and consumer group
+   * Calculate #consumer lag for a _topic and #consumer group
    * @param {string} consumerGroup - Consumer group ID
    * @param {string} topic - Topic name
    * @param {Object} admin - Admin client (optional, will create if not provided)
@@ -371,7 +359,7 @@ class KafkaManager {
    */
   static async calculateConsumerLag(consumerGroup, topic, admin = null) {
     if (!consumerGroup || !topic || !admin) {
-      logger.logWarning("Consumer group or topic not specified for lag calculation");
+      logger.logWarning("Consumer group or _topic not specified for lag calculation");
       return 0;
     }
     try {
@@ -399,7 +387,7 @@ class KafkaManager {
   }
 
   /**
-   * Get latest offsets for all partitions of a topic
+   * Get latest offsets for all partitions of a _topic
    * @param {Object} admin - Kafka admin client
    * @param {string} topic - Topic name
    * @returns {Promise<Object>} Map of partition to latest offset
@@ -421,7 +409,7 @@ class KafkaManager {
   }
 
   /**
-   * Get committed offsets for a consumer group on a topic
+   * Get committed offsets for a #consumer group on a _topic
    * @param {Object} admin - Kafka admin client
    * @param {string} consumerGroup - Consumer group ID
    * @param {string} topic - Topic name

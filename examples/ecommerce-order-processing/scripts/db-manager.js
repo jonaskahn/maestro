@@ -287,12 +287,12 @@ async function handleCommand(command, args) {
         break;
 
       case "generate":
-        orderCount = parseInt(args[0], 10) || 10;
+        orderCount = parseInt(args[0], 10) || 100;
         await generateTestOrders(orderCount);
         break;
 
       case "init-with-data":
-        orderCount = parseInt(args[0], 10) || 50;
+        orderCount = parseInt(args[0], 10) || 1000;
         await initializeDatabase(orderCount);
         break;
 

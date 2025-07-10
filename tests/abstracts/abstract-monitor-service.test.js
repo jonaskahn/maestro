@@ -290,7 +290,7 @@ describe("AbstractMonitorService", () => {
       const metrics = await monitorService.collectLagMetrics();
 
       expect(metrics).toHaveProperty("totalLag", 0);
-      expect(logger.logWarning).toHaveBeenCalledWith("Failed to collect consumer lag metrics", expect.any(Error));
+      expect(logger.logWarning).toHaveBeenCalledWith("Failed to collect #consumer lag metrics", expect.any(Error));
     });
   });
 

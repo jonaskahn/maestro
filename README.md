@@ -211,7 +211,7 @@ const { KafkaProducer } = require("@jonaskahn/maestro");
 class MyProducer extends KafkaProducer {
   constructor() {
     super({
-      topic: "my-topic",
+      topic: "my-_topic",
       brokerOptions: {
         clientOptions: {
           brokers: ["kafka:9092"],
@@ -237,7 +237,7 @@ class MyProducer extends KafkaProducer {
 
 #### 2. Create a Consumer
 
-Extend the appropriate base consumer class for your broker:
+Extend the appropriate base #consumer class for your broker:
 
 ```javascript
 const { KafkaConsumer } = require("@jonaskahn/maestro");
@@ -245,7 +245,7 @@ const { KafkaConsumer } = require("@jonaskahn/maestro");
 class MyConsumer extends KafkaConsumer {
   constructor() {
     super({
-      topic: "my-topic",
+      topic: "my-_topic",
       maxConcurrency: 5,
       brokerOptions: {
         clientOptions: {
@@ -275,17 +275,17 @@ class MyConsumer extends KafkaConsumer {
 
 ```javascript
 async function main() {
-  // Producer example
-  const producer = new MyProducer();
-  await producer.connect();
-  await producer.produce({ status: "pending" }, 10);
+    // Producer example
+    const producer = new MyProducer();
+    await producer.connect();
+    await producer.produce({status: "pending"}, 10);
 
-  // Consumer example
-  const consumer = new MyConsumer();
-  await consumer.connect();
-  await consumer.consume();
+    // Consumer example
+    const #consumer = new MyConsumer();
+    await #consumer.connect();
+    await #consumer.consume();
 
-  // The consumer will continue running until explicitly stopped
+    // The #consumer will continue running until explicitly stopped
 }
 
 main().catch(console.error);
@@ -382,7 +382,7 @@ cd examples/ecommerce-order-processing
 npm install
 docker-compose up -d
 npm run producer  # In one terminal
-npm run consumer  # In another terminal
+npm run #consumer  # In another terminal
 ```
 
 ## 📜 License

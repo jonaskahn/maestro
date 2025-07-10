@@ -152,9 +152,9 @@ describe("AbstractCache", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        JO_CACHE_KEY_PREFIX: "env:",
-        JO_CACHE_KEY_SUFFIXES_PROCESSING: "_PROC:",
-        JO_CACHE_KEY_SUFFIXES_FREEZING: "_FREEZE:",
+        MO_CACHE_KEY_PREFIX: "env:",
+        MO_CACHE_KEY_SUFFIXES_PROCESSING: "_PROC:",
+        MO_CACHE_KEY_SUFFIXES_FREEZING: "_FREEZE:",
       };
 
       const envInstance = new TestCache({ keyPrefix: "env:" });

@@ -5,11 +5,12 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Abstract Cache Layer Base Class for cache implementation providers
+ * Abstract Cache Layer Base Class
  *
- * Provides unified interface for key-value operations across Redis, Memcached, in-memory cache
- * with job orchestration features including processing state management and message tracking.
- * This class must be extended by specific cache implementations.
+ * Provides unified interface for key-value operations across various cache implementations
+ * such as Redis, Memcached, and in-memory cache. Supports job orchestration features including
+ * processing state management and message tracking. This class must be extended by specific
+ * cache implementations.
  */
 const logger = require("../services/logger-service");
 const TTLConfig = require("../config/ttl-config");
@@ -38,18 +39,19 @@ const CONNECTION_STATES = {
 };
 
 const ENV_KEYS = {
-  CACHE_KEY_PREFIX: ["JO_CACHE_KEY_PREFIX"],
-  PROCESSING_SUFFIX: ["JO_CACHE_KEY_SUFFIXES_PROCESSING"],
-  FREEZING_SUFFIX: ["JO_CACHE_KEY_SUFFIXES_FREEZING"],
+  CACHE_KEY_PREFIX: ["MO_CACHE_KEY_PREFIX"],
+  PROCESSING_SUFFIX: ["MO_CACHE_KEY_SUFFIXES_PROCESSING"],
+  FREEZING_SUFFIX: ["MO_CACHE_KEY_SUFFIXES_FREEZING"],
 };
 
 /**
- * Abstract Cache Layer Base Class for cache implementation providers
- * Provides unified interface for key-value operations across Redis, Memcached, in-memory cache
- * with job orchestration features including processing state management and message tracking
+ * Abstract Cache Layer Base Class
+ *
+ * Base class for implementing cache providers that provides a unified interface
+ * for key-value operations with job orchestration capabilities.
  */
 class AbstractCache {
-  #isConnected;
+  _isConnected;
 
   /**
    * Create cache instance with configuration validation and initialization
@@ -64,14 +66,14 @@ class AbstractCache {
       throw new Error("Configuration must be an object");
     }
 
-    if (!this.isNonEmptyString(config.keyPrefix)) {
+    if (!this.#isNonEmptyString(config.keyPrefix)) {
       throw new Error("keyPrefix is required and must be a non-empty string");
     }
 
     this.implementation = config.implementation;
 
-    const processingKeySuffix = this.getEnvironmentValue(ENV_KEYS.PROCESSING_SUFFIX) || KEY_SUFFIXES.PROCESSING;
-    const freezingKeySuffix = this.getEnvironmentValue(ENV_KEYS.FREEZING_SUFFIX) || KEY_SUFFIXES.FREEZING;
+    const processingKeySuffix = this.#getEnvironmentValue(ENV_KEYS.PROCESSING_SUFFIX) || KEY_SUFFIXES.PROCESSING;
+    const freezingKeySuffix = this.#getEnvironmentValue(ENV_KEYS.FREEZING_SUFFIX) || KEY_SUFFIXES.FREEZING;
 
     this.config = {
       processingPrefix: `${config.keyPrefix}${processingKeySuffix}`,
@@ -82,20 +84,20 @@ class AbstractCache {
       retryOptions: config.retryOptions || {},
     };
 
-    logger.logDebug("ℹ️ Cache configuration", {
+    logger.logDebug("Cache configuration", {
       implementation: this.implementation,
       processingTtl: this.config.processingTtl,
       suppressionTtl: this.config.suppressionTtl,
     });
 
-    this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+    this._isConnected = CONNECTION_STATES.DISCONNECTED;
   }
 
-  isNonEmptyString(value) {
+  #isNonEmptyString(value) {
     return typeof value === "string" && value.trim().length > 0;
   }
 
-  getEnvironmentValue(keys) {
+  #getEnvironmentValue(keys) {
     for (const key of keys) {
       const value = process.env[key];
       if (value !== undefined) {
@@ -111,25 +113,35 @@ class AbstractCache {
    */
   async connect() {
     if (await this._checkExistingConnection()) {
-      this.#isConnected = CONNECTION_STATES.CONNECTED;
+      this._isConnected = CONNECTION_STATES.CONNECTED;
       logger.logDebug(`Using existing connection to ${this.implementation} cache`);
       return;
     }
 
     try {
       await this._connectTo();
-      this.#isConnected = CONNECTION_STATES.CONNECTED;
+      this._isConnected = CONNECTION_STATES.CONNECTED;
     } catch (error) {
-      this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+      this._isConnected = CONNECTION_STATES.DISCONNECTED;
       logger.logError(`Failed to connect to ${this.implementation} cache`, error);
       throw error;
     }
   }
 
+  /**
+   * Check if cache already has active connection
+   * @abstract
+   * @returns {Promise<boolean>} True if connection already exists
+   */
   async _checkExistingConnection() {
     throw new Error("_checkExistingConnection method must be implemented by subclass");
   }
 
+  /**
+   * Connect to the cache system
+   * @abstract
+   * @returns {Promise<void>}
+   */
   async _connectTo() {
     throw new Error("_connectTo method must be implemented by subclass");
   }
@@ -139,31 +151,28 @@ class AbstractCache {
    * @returns {Promise<void>}
    */
   async disconnect() {
-    if (this.isConnected()) {
+    if (this._isConnected === CONNECTION_STATES.CONNECTED) {
       try {
         await this._disconnectFrom();
-        this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+        this._isConnected = CONNECTION_STATES.DISCONNECTED;
       } catch (error) {
         logger.logWarning(`Error disconnecting from ${this.implementation} cache`, error);
-        this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+        this._isConnected = CONNECTION_STATES.DISCONNECTED;
       }
     }
   }
 
-  isConnected() {
-    return this.#isConnected === CONNECTION_STATES.CONNECTED;
-  }
-
-  isDisconnected() {
-    return this.#isConnected === CONNECTION_STATES.DISCONNECTED;
-  }
-
+  /**
+   * Disconnect from the cache system
+   * @abstract
+   * @returns {Promise<void>}
+   */
   async _disconnectFrom() {
     throw new Error("_disconnectFrom method must be implemented by subclass");
   }
 
-  validateKeyValue(key, value) {
-    if (!this.isNonEmptyString(key)) {
+  #validateKeyValue(key, value) {
+    if (!this.#isNonEmptyString(key)) {
       throw new Error("Key must be a non-empty string");
     }
 
@@ -172,13 +181,13 @@ class AbstractCache {
     }
   }
 
-  ensureConnected() {
-    if (this.isDisconnected()) {
+  #ensureConnected() {
+    if (this._isConnected === CONNECTION_STATES.DISCONNECTED) {
       throw new Error("Cache is not connected");
     }
   }
 
-  logKeyOperation(operation, key, ttl = null) {
+  #logKeyOperation(operation, key, ttl = null) {
     const logData = { key, operation };
     if (ttl) {
       logData.ttl = ttl;
@@ -190,16 +199,25 @@ class AbstractCache {
    * Set a value in the cache
    * @param {string} key Key to set
    * @param {string|Object} value Value to store
+   * @param {Object} options Options including TTL
+   * @returns {Promise<boolean>} Success indicator
+   */
+  async set(key, value, options = {}) {
+    const ttl = options?.ttl || CacheConfig.defaultTtl;
+    this.#validateKeyValue(key, value);
+    this.#ensureConnected();
+    this.#logKeyOperation(CACHE_OPERATIONS.SET, key, ttl);
+    return await this._setKeyValue(key, value, ttl);
+  }
+
+  /**
+   * Set a value in the cache implementation
+   * @abstract
+   * @param {string} key Key to set
+   * @param {string|Object} value Value to store
    * @param {number} ttlMs TTL in milliseconds
    * @returns {Promise<boolean>} Success indicator
    */
-  async set(key, value, ttlMs) {
-    this.validateKeyValue(key, value);
-    this.ensureConnected();
-    this.logKeyOperation(CACHE_OPERATIONS.SET, key, ttlMs);
-    return await this._setKeyValue(key, value, ttlMs);
-  }
-
   async _setKeyValue(key, value, ttlMs) {
     throw new Error("_setKeyValue method must be implemented by subclass");
   }
@@ -210,15 +228,21 @@ class AbstractCache {
    * @returns {Promise<any>} Retrieved value or null
    */
   async get(key) {
-    if (!this.isNonEmptyString(key)) {
+    if (!this.#isNonEmptyString(key)) {
       throw new Error("Key must be a non-empty string");
     }
-    this.ensureConnected();
-    this.logKeyOperation(CACHE_OPERATIONS.GET, key);
+    this.#ensureConnected();
+    this.#logKeyOperation(CACHE_OPERATIONS.GET, key);
     return await this._getKeyValue(key);
   }
 
-  async _getKeyValue(_key) {
+  /**
+   * Get a value from the cache implementation
+   * @abstract
+   * @param {string} key Key to retrieve
+   * @returns {Promise<any>} Retrieved value or null
+   */
+  async _getKeyValue(key) {
     throw new Error("_getKeyValue method must be implemented by subclass");
   }
 
@@ -228,15 +252,21 @@ class AbstractCache {
    * @returns {Promise<boolean>} Success indicator
    */
   async del(key) {
-    if (!this.isNonEmptyString(key)) {
+    if (!this.#isNonEmptyString(key)) {
       throw new Error("Key must be a non-empty string");
     }
-    this.ensureConnected();
-    this.logKeyOperation(CACHE_OPERATIONS.DELETE, key);
+    this.#ensureConnected();
+    this.#logKeyOperation(CACHE_OPERATIONS.DELETE, key);
     return await this._deleteKey(key);
   }
 
-  async _deleteKey(_key) {
+  /**
+   * Delete a key from the cache implementation
+   * @abstract
+   * @param {string} key Key to delete
+   * @returns {Promise<boolean>} Success indicator
+   */
+  async _deleteKey(key) {
     throw new Error("_deleteKey method must be implemented by subclass");
   }
 
@@ -244,78 +274,101 @@ class AbstractCache {
    * Set a value only if the key doesn't exist
    * @param {string} key Key to set
    * @param {string|Object} value Value to store
+   * @param {Object} options Options including TTL
+   * @returns {Promise<boolean>} True if set, false if key exists
+   */
+  async setIfNotExists(key, value, options = {}) {
+    const ttl = options?.ttl || CacheConfig.defaultTtl;
+    this.#validateKeyValue(key, value);
+    this.#ensureConnected();
+    this.#logKeyOperation(CACHE_OPERATIONS.SET_IF_NOT_EXISTS, key, ttl);
+    return await this._setKeyIfNotExists(key, value, ttl);
+  }
+
+  /**
+   * Set a value only if key doesn't exist in cache implementation
+   * @abstract
+   * @param {string} key Key to set
+   * @param {string|Object} value Value to store
    * @param {number} ttlMs TTL in milliseconds
    * @returns {Promise<boolean>} True if set, false if key exists
    */
-  async setIfNotExists(key, value, ttlMs) {
-    this.validateKeyValue(key, value);
-    this.ensureConnected();
-    this.logKeyOperation(CACHE_OPERATIONS.SET_IF_NOT_EXISTS, key, ttlMs);
-    return await this._setKeyIfNotExists(key, value, ttlMs);
-  }
-
-  async _setKeyIfNotExists(_key, _value, _ttlMs) {
+  async _setKeyIfNotExists(key, value, ttlMs) {
     throw new Error("_setKeyIfNotExists method must be implemented by subclass");
   }
 
   /**
    * Check if a key exists in the cache
    * @param {string} key Key to check
-   * @returns {Promise<boolean>} True if exists
+   * @returns {Promise<boolean>} True if key exists
    */
   async exists(key) {
-    if (!this.isNonEmptyString(key)) {
+    if (!this.#isNonEmptyString(key)) {
       throw new Error("Key must be a non-empty string");
     }
-    this.ensureConnected();
+    this.#ensureConnected();
     return await this._checkKeyExists(key);
   }
 
-  async _checkKeyExists(_key) {
+  /**
+   * Check if a key exists in the cache implementation
+   * @abstract
+   * @param {string} key Key to check
+   * @returns {Promise<boolean>} True if key exists
+   */
+  async _checkKeyExists(key) {
     throw new Error("_checkKeyExists method must be implemented by subclass");
   }
 
   /**
-   * Set or update the expiration for a key
+   * Update expiration time for a key
    * @param {string} key Key to update
    * @param {number} ttlMs New TTL in milliseconds
    * @returns {Promise<boolean>} Success indicator
    */
   async expire(key, ttlMs) {
-    if (!this.isNonEmptyString(key)) {
+    if (!this.#isNonEmptyString(key)) {
       throw new Error("Key must be a non-empty string");
     }
-
-    if (typeof ttlMs !== "number" || ttlMs <= 0) {
-      throw new Error("TTL must be a positive number");
+    if (!Number.isInteger(ttlMs) || ttlMs <= 0) {
+      throw new Error("TTL must be a positive integer");
     }
-
-    this.ensureConnected();
-    this.logKeyOperation(CACHE_OPERATIONS.SET_EXPIRY, key, ttlMs);
+    this.#ensureConnected();
+    this.#logKeyOperation(CACHE_OPERATIONS.SET_EXPIRY, key, ttlMs);
     return await this._setKeyExpiry(key, ttlMs);
   }
 
-  async _setKeyExpiry(_key, _ttlMs) {
+  /**
+   * Update expiration time for a key in cache implementation
+   * @abstract
+   * @param {string} key Key to update
+   * @param {number} ttlMs New TTL in milliseconds
+   * @returns {Promise<boolean>} Success indicator
+   */
+  async _setKeyExpiry(key, ttlMs) {
     throw new Error("_setKeyExpiry method must be implemented by subclass");
   }
 
   /**
    * Find keys matching a pattern
    * @param {string} pattern Pattern to match
-   * @returns {Promise<string[]>} Matching keys
+   * @returns {Promise<Array<string>>} Matched keys
    */
   async keys(pattern) {
-    if (!this.isNonEmptyString(pattern)) {
+    if (!this.#isNonEmptyString(pattern)) {
       throw new Error("Pattern must be a non-empty string");
     }
-    this.ensureConnected();
-
-    const keys = await this._findKeysByPattern(pattern);
-    logger.logDebug(`Found ${keys.length} keys matching pattern: ${pattern}`);
-    return keys;
+    this.#ensureConnected();
+    return await this._findKeysByPattern(pattern);
   }
 
-  async _findKeysByPattern(_pattern) {
+  /**
+   * Find keys matching a pattern in cache implementation
+   * @abstract
+   * @param {string} pattern Pattern to match
+   * @returns {Promise<Array<string>>} Matched keys
+   */
+  async _findKeysByPattern(pattern) {
     throw new Error("_findKeysByPattern method must be implemented by subclass");
   }
 
@@ -325,81 +378,104 @@ class AbstractCache {
    * @returns {Promise<boolean>} Success indicator
    */
   async markAsProcessing(itemId) {
-    if (!this.isNonEmptyString(itemId)) {
-      throw new Error("Item ID must be a non-empty string");
+    if (!this.#isNonEmptyString(itemId)) {
+      throw new Error("itemId must be a non-empty string");
     }
-    this.ensureConnected();
+    this.#ensureConnected();
+
     const key = `${this.config.processingPrefix}${itemId}`;
-    return await this.setIfNotExists(key, itemId, this.config.processingTtl);
+    this.#logKeyOperation(CACHE_OPERATIONS.SET_PROCESSING, key, this.config.processingTtl);
+
+    return await this._setKeyIfNotExists(key, "1", this.config.processingTtl);
   }
 
   /**
-   * Mark an item as being processed
+   * Mark an item as completed processing
    * @param {string} itemId Item identifier
    * @returns {Promise<boolean>} Success indicator
    */
   async markAsCompletedProcessing(itemId) {
-    if (!this.isNonEmptyString(itemId)) {
-      throw new Error("Item ID must be a non-empty string");
+    if (!this.#isNonEmptyString(itemId)) {
+      throw new Error("itemId must be a non-empty string");
     }
-    this.ensureConnected();
-    const key = `${this.config.processingPrefix}${itemId}`;
-    return await this.del(key);
-  }
+    this.#ensureConnected();
 
-  async markAsSuppressed(itemId) {
-    if (!this.isNonEmptyString(itemId)) {
-      throw new Error("Item ID must be a non-empty string");
-    }
-    this.ensureConnected();
-    const key = `${this.config.suppressionPrefix}${itemId}`;
-    return await this.setIfNotExists(key, itemId, this.config.suppressionTtl);
+    const key = `${this.config.processingPrefix}${itemId}`;
+    this.#logKeyOperation(CACHE_OPERATIONS.REMOVE_PROCESSING, key);
+
+    return await this._deleteKey(key);
   }
 
   /**
-   * Check if a message was sent recently
+   * Mark an item as suppressed for deduplication
    * @param {string} itemId Item identifier
-   * @returns {Promise<boolean>} True if sent recently
+   * @returns {Promise<boolean>} Success indicator
+   */
+  async markAsSuppressed(itemId) {
+    if (!this.#isNonEmptyString(itemId)) {
+      throw new Error("itemId must be a non-empty string");
+    }
+    this.#ensureConnected();
+
+    const key = `${this.config.suppressionPrefix}${itemId}`;
+    this.#logKeyOperation(CACHE_OPERATIONS.SET_FREEZING, key, this.config.suppressionTtl);
+
+    return await this._setKeyValue(key, "1", this.config.suppressionTtl);
+  }
+
+  /**
+   * Check if an item has been suppressed recently
+   * @param {string} itemId Item identifier
+   * @returns {Promise<boolean>} True if item is suppressed
    */
   async isSuppressedRecently(itemId) {
-    if (!this.isNonEmptyString(itemId)) {
-      throw new Error("Item ID must be a non-empty string");
+    if (!this.#isNonEmptyString(itemId)) {
+      throw new Error("itemId must be a non-empty string");
     }
-    this.ensureConnected();
+    this.#ensureConnected();
 
-    const suppressedKey = `${this.config.suppressionPrefix}${itemId}`;
-    return await this.exists(suppressedKey);
+    const key = `${this.config.suppressionPrefix}${itemId}`;
+    return await this._checkKeyExists(key);
   }
 
   /**
-   * Get IDs of all items currently being processed
-   * @returns {Promise<string[]>} Processing item IDs
+   * Get all currently processing item IDs
+   * @returns {Promise<Array<string>>} Processing item IDs
    */
   async getProcessingIds() {
-    return await this.getIdsByPrefix("processing", this.config.processingPrefix);
-  }
+    this.#ensureConnected();
 
-  async getIdsByPrefix(typeName, keyPrefix) {
-    try {
-      const pattern = `${keyPrefix}*`;
-      const keys = await this.keys(pattern);
+    const pattern = `${this.config.processingPrefix}*`;
+    const keys = await this._findKeysByPattern(pattern);
 
-      const ids = keys.map(key => key.substring(keyPrefix.length));
-      logger.logDebug(`Found ${ids.length} ${typeName} IDs`);
-
-      return ids;
-    } catch (error) {
-      logger.logWarning(`Failed to retrieve ${typeName} IDs`, error);
-      return [];
-    }
+    return keys.map(key => {
+      const prefixLength = this.config.processingPrefix.length;
+      return key.substring(prefixLength);
+    });
   }
 
   /**
-   * Get IDs of all items in freezing state
-   * @returns {Promise<string[]>} Freezing item IDs
+   * Get all currently suppressed item IDs
+   * @returns {Promise<Array<string>>} Suppressed item IDs
    */
   async getSuppressedIds() {
-    return await this.getIdsByPrefix("suppressed", this.config.suppressionPrefix);
+    this.#ensureConnected();
+
+    const pattern = `${this.config.suppressionPrefix}*`;
+    const keys = await this._findKeysByPattern(pattern);
+
+    return keys.map(key => {
+      const prefixLength = this.config.suppressionPrefix.length;
+      return key.substring(prefixLength);
+    });
+  }
+
+  /**
+   * Check if cache is connected
+   * @returns {boolean} True if connected
+   */
+  isConnected() {
+    return this._isConnected === CONNECTION_STATES.CONNECTED;
   }
 }
 

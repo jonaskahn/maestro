@@ -5,10 +5,12 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Distributed Lock Service for coordinating access to shared resources across multiple processes
+ * Distributed Lock Service
  *
- * Provides cache-based distributed locking with auto-refresh capabilities to ensure only one
- * producer per topic/type processes at a time. Works with any cache implementation (Redis, Memcached, etc.)
+ * Provides cache-based distributed locking with automatic refresh capabilities
+ * to ensure exclusive access to shared resources across multiple processes.
+ * Works with any compatible cache implementation and includes exponential
+ * backoff retry strategies.
  */
 const logger = require("./logger-service");
 const TTLConfig = require("../config/ttl-config");
@@ -26,17 +28,12 @@ const LOCK_STATES = {
   UNLOCKED: false,
 };
 
-/**
- * Distributed Lock Service for coordinating access to shared resources across multiple processes
- * Provides cache-based distributed locking with auto-refresh capabilities to ensure only one
- * producer per topic/type processes at a time. Works with any cache implementation (Redis, Memcached, etc.)
- */
 class DistributedLockService {
   /**
    * Creates a new distributed lock
-   * @param {string} lockKey - Cache key for the lock
-   * @param {number} ttlMs - Lock TTL in milliseconds (default: from TTLConfig)
-   * @param {Object} cacheInstance - Cache instance for lock storage (optional)
+   * @param {string} lockKey Cache key for the lock
+   * @param {number} ttlMs Lock TTL in milliseconds (default: from TTLConfig)
+   * @param {Object} cacheInstance Cache instance for lock storage (optional)
    */
   constructor(lockKey, ttlMs = TtlConfig.ttlMs, cacheInstance = null) {
     if (!lockKey || typeof lockKey !== "string") {
@@ -73,21 +70,17 @@ class DistributedLockService {
 
     while (Date.now() - startTime < maxWaitTime) {
       attemptCount++;
-
       try {
         if (!this.cacheLayer) {
-          throw new Error("No cache layer available for lock operations");
+          logger.logWarning("Cache layer is not enabled, distributed locking is not working.");
+          return { success: true };
         }
-
         const result = await this.cacheLayer.setIfNotExists(this.lockKey, this.lockValue, this.ttl);
-
         if (result) {
           logger.logInfo(`Lock acquired: ${this.lockKey} (attempt ${attemptCount})`);
           return { success: true };
         }
-
         logger.logDebug(`Lock acquisition attempt ${attemptCount} failed, retrying...`);
-
         const baseDelay = TtlConfig.retryDelayMs;
         const maxDelay = Math.min(
           baseDelay * Math.pow(DEFAULT_VALUES.BACKOFF_MULTIPLIER, attemptCount),
@@ -176,7 +169,7 @@ class DistributedLockService {
 
   /**
    * Attempts to acquire the distributed lock with retry logic
-   * @param {number} maxWaitTime - Maximum time to wait for lock acquisition in milliseconds
+   * @param {number} maxWaitTime Maximum time to wait for lock acquisition in milliseconds
    * @returns {Promise<boolean>} True if lock was successfully acquired
    * @throws {Error} When lock acquisition fails after all retries
    */
@@ -229,9 +222,8 @@ class DistributedLockService {
   }
 
   /**
-   * Disconnects from the cache layer and cleans up resources
-   * @returns {Promise<void>}
-   * @throws {Error} When disconnection fails
+   * Disconnects and cleans up the distributed lock
+   * @returns {Promise<boolean>} True if cleanup was successful
    */
   async disconnect() {
     await this.release().catch(error => {
@@ -249,23 +241,21 @@ class DistributedLockService {
   }
 
   /**
-   * Returns comprehensive lock status information
-   * @returns {Object} Status object with lock details and cache information
+   * Gets the current status of the lock
+   * @returns {Object} Lock status object
    */
   getStatus() {
     return {
-      lockKey: this.lockKey,
-      lockValue: this.lockValue,
-      ttl: this.ttl,
+      key: this.lockKey,
       isLocked: this.isLocked,
-      hasAutoRefresh: Boolean(this.refreshInterval),
-      cacheConnected: this.cacheLayer && this.cacheLayer.isConnected,
-      hasCacheLayer: Boolean(this.cacheLayer),
+      ttl: this.ttl,
+      autoRefresh: this.refreshInterval !== null,
+      cacheAvailable: this.cacheLayer !== null,
     };
   }
 
   /**
-   * Gets the lock key used by this instance
+   * Gets the lock key
    * @returns {string} Lock key
    */
   getLockKey() {

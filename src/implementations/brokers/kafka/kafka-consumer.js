@@ -7,33 +7,34 @@
  *
  * Kafka Consumer Implementation
  *
- * Provides specialized Kafka implementation of AbstractConsumer
- * with support for message consumption, deserialization, and batching.
+ * Concrete implementation of AbstractConsumer using Kafka as the message broker.
+ * Provides specialized support for Kafka message consumption, deserialization,
+ * offset management, and parallel partition processing.
  */
 const AbstractConsumer = require("../../../abstracts/abstract-consumer");
 const logger = require("../../../services/logger-service");
 
-// Using the new KafkaManager that combines utilities and client factory
 const KafkaManager = require("./kafka-manager");
 const CacheClientFactory = require("../../cache/cache-client-factory");
 
 class KafkaConsumer extends AbstractConsumer {
+  _groupId;
+  _clientOptions;
+  _consumerOptions;
+  _client;
+  _consumer;
+
   /**
    * Create a new Kafka consumer instance
-   * @param {Object} config - Configuration object
-   * @param {string} config.topic - Topic to consume from
-   * @param {string} config.groupId - Consumer group ID
-   * @param {Object} config.clientOptions - Kafka client connection options
-   * @param {Object} config.consumerOptions - Kafka consumer specific options
-   * @param {boolean} [config.consumerOptions.fromBeginning=false] - Whether to consume from beginning
-   * @param {boolean} [config.consumerOptions.autoCommit=true] - Whether to auto-commit offsets
+   * @param {Object} config Configuration object
    */
   constructor(config) {
     super(KafkaManager.standardizeConfig(config, "consumer"));
-    this.groupId = this.config.groupId;
-    this.clientOptions = this.config.clientOptions;
-    this.consumerOptions = this.config.consumerOptions;
-    this.consumer = KafkaManager.createConsumer(null, this.clientOptions, this.consumerOptions);
+    this._groupId = this.config.groupId;
+    this._clientOptions = this.config.clientOptions;
+    this._consumerOptions = this.config.consumerOptions;
+    this._client = KafkaManager.createClient(this._clientOptions);
+    this._consumer = KafkaManager.createConsumer(this._client, null, this._consumerOptions);
   }
 
   _createCacheLayer(cacheOptions) {
@@ -53,30 +54,31 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   async _connectToMessageBroker() {
-    await this.consumer.connect();
+    await this._consumer.connect();
     logger.logConnectionEvent("🔌 Kafka Consumer", "connected to Kafka broker");
   }
 
   async _disconnectFromMessageBroker() {
-    if (this.consumer) {
-      await this.consumer.disconnect();
-      this.consumer = null;
+    if (this._consumer) {
+      await this._consumer.disconnect();
+      this._consumer = null;
     }
+    this._client = null;
     logger.logConnectionEvent("Kafka Consumer", "disconnected from Kafka broker");
   }
 
   async _startConsumingFromBroker(_options = {}) {
-    await this.consumer.subscribe({
-      topic: this.topic,
-      fromBeginning: this.consumerOptions.fromBeginning,
+    await this._consumer.subscribe({
+      topic: this._topic,
+      fromBeginning: this._consumerOptions.fromBeginning,
     });
 
-    await this.consumer.run({
+    await this._consumer.run({
       partitionsConsumedConcurrently: this.maxConcurrency,
       eachMessage: async ({ topic, partition, message }) => {
         try {
           const standardizeMessage = this.#extractBrokerMessage({
-            topic,
+            _topic: topic,
             partition,
             message,
           });
@@ -86,11 +88,11 @@ class KafkaConsumer extends AbstractConsumer {
             standardizeMessage.messageId,
             standardizeMessage.item
           );
-          if (this.consumerOptions.autoCommit) {
+          if (this._consumerOptions.autoCommit) {
             logger.logDebug(`🔄 Auto-committed message offset ${message.offset}`);
           } else {
             if (!standardizeMessage.committed) {
-              await this.consumer.commitOffsets([
+              await this._consumer.commitOffsets([
                 {
                   topic,
                   partition,
@@ -103,9 +105,9 @@ class KafkaConsumer extends AbstractConsumer {
           }
         } catch (error) {
           logger.logError(`❌ Error processing Kafka message from ${topic}:${partition}:${message.offset}`, error);
-          if (!this.consumerOptions.autoCommit) {
+          if (!this._consumerOptions.autoCommit) {
             try {
-              await this.consumer.commitOffsets([
+              await this._consumer.commitOffsets([
                 {
                   topic,
                   partition,
@@ -121,20 +123,9 @@ class KafkaConsumer extends AbstractConsumer {
       },
     });
 
-    logger.logInfo(`📨 Kafka consumer started for topic '${this.topic}' in group '${this.groupId}'`);
+    logger.logInfo(`📨 Kafka consumer started for topic '${this._topic}' in group '${this.groupId}'`);
   }
 
-  /**
-   * Convert Kafka message to standardized format following STANDARDIZED_MESSAGE_INTERFACE
-   * @param {Object} kafkaMessage - Native Kafka message
-   * @param {string} kafkaMessage.topic - The Kafka topic
-   * @param {number} kafkaMessage.partition - The Kafka partition
-   * @param {Object} kafkaMessage.message - The raw Kafka message object
-   * @param {string} kafkaMessage.message.offset - Message offset in the partition
-   * @param {Buffer} kafkaMessage.message.value - Message value as Buffer
-   * @returns {Object} Standardized message with type, messageId, item and committed status
-   * @private
-   */
   #extractBrokerMessage(kafkaMessage) {
     logger.logDebug(`ℹ️ KafkaConsumer start to unwrap received message`);
     const { topic, partition, message } = kafkaMessage;
@@ -151,19 +142,19 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   async _stopConsumingFromBroker() {
-    await this.consumer?.stop();
-    logger.logInfo(`⏹️ Kafka consumer stopped for topic '${this.topic}'`);
+    await this._consumer?.stop();
+    logger.logInfo(`⏹️ Kafka consumer stopped for topic '${this._topic}'`);
   }
 
   getConfigStatus() {
     return {
       ...super.getConfigStatus(),
       groupId: this.groupId,
-      sessionTimeout: this.consumerOptions.sessionTimeout,
-      heartbeatInterval: this.consumerOptions.heartbeatInterval,
-      maxBytesPerPartition: this.consumerOptions.maxBytesPerPartition,
-      autoCommit: this.consumerOptions.autoCommit,
-      fromBeginning: this.consumerOptions.fromBeginning,
+      sessionTimeout: this._consumerOptions.sessionTimeout,
+      heartbeatInterval: this._consumerOptions.heartbeatInterval,
+      maxBytesPerPartition: this._consumerOptions.maxBytesPerPartition,
+      autoCommit: this._consumerOptions.autoCommit,
+      fromBeginning: this._consumerOptions.fromBeginning,
       partitionsConsumedConcurrently: this.maxConcurrency,
     };
   }

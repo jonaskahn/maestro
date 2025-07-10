@@ -5,9 +5,11 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Redis Cache Layer Implementation
+ * Redis Cache Client Implementation
  *
- * Concrete implementation of AbstractCache using Redis as the backend
+ * Concrete implementation of AbstractCache using Redis as the backend.
+ * Provides Redis-specific connection management, key-value operations,
+ * and pattern matching functionality with error handling and reconnection logic.
  */
 const AbstractCache = require("../../abstracts/abstract-cache");
 const redis = require("redis");
@@ -23,8 +25,8 @@ class RedisCacheClient extends AbstractCache {
     const connectionOptions = this.config.connectionOptions || {};
 
     const clientConfig = {
-      url: connectionOptions.url || process.env.JO_REDIS_URL || "redis://localhost:6379",
-      password: connectionOptions.password || process.env.JO_REDIS_PASSWORD,
+      url: connectionOptions.url || process.env.MO_REDIS_URL || "redis://localhost:6379",
+      password: connectionOptions.password || process.env.MO_REDIS_PASSWORD,
       retry_strategy: this.#createRetryStrategy(),
       socket: {
         reconnectStrategy: this.#createReconnectionStrategy(),
@@ -39,9 +41,9 @@ class RedisCacheClient extends AbstractCache {
   }
 
   #createRetryStrategy() {
-    const maxRetryAttempts = parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
-    const retryDelayMs = parseInt(process.env.JO_REDIS_DELAY_MS) || 1000;
-    const maxDelayMs = parseInt(process.env.JO_REDIS_MAX_DELAY_MS) || 30000;
+    const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
+    const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
+    const maxDelayMs = parseInt(process.env.MO_REDIS_MAX_DELAY_MS) || 30000;
 
     return attemptNumber => {
       if (attemptNumber > maxRetryAttempts) {
@@ -56,9 +58,9 @@ class RedisCacheClient extends AbstractCache {
   }
 
   #createReconnectionStrategy() {
-    const maxRetryAttempts = parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
-    const retryDelayMs = parseInt(process.env.JO_REDIS_DELAY_MS) || 1000;
-    const maxDelayMs = parseInt(process.env.JO_REDIS_MAX_DELAY_MS) || 30000;
+    const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
+    const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
+    const maxDelayMs = parseInt(process.env.MO_REDIS_MAX_DELAY_MS) || 30000;
 
     return retryAttemptNumber => {
       if (retryAttemptNumber > maxRetryAttempts) {
@@ -110,13 +112,6 @@ class RedisCacheClient extends AbstractCache {
     }
   }
 
-  /**
-   * Set a value in the cache with optional TTL
-   * @param {string} key - Cache key
-   * @param {any} value - Value to store
-   * @param {number} ttlMs - Time-to-live in milliseconds
-   * @returns {Promise<boolean>} Success indicator
-   */
   async _setKeyValue(key, value, ttlMs) {
     if (ttlMs) {
       const ttlSeconds = Math.ceil(ttlMs / 1000);
@@ -141,12 +136,6 @@ class RedisCacheClient extends AbstractCache {
     return await this.client.exists(key);
   }
 
-  /**
-   * Set expiry for existing key (Redis expects seconds, we convert from milliseconds)
-   * @param {string} key - Cache key
-   * @param {number} ttlMs - Time-to-live in milliseconds (converted to seconds for Redis)
-   * @returns {Promise<boolean>} True if expiry was set
-   */
   async _setKeyExpiry(key, ttlMs) {
     const ttlSeconds = Math.ceil(ttlMs / 1000);
     return await this.client.expire(key, ttlSeconds);
@@ -173,13 +162,6 @@ class RedisCacheClient extends AbstractCache {
     }
   }
 
-  /**
-   * Set key with TTL if not exists (Redis expects seconds, we convert from milliseconds)
-   * @param {string} key - Cache key
-   * @param {any} value - Value to store
-   * @param {number} ttlMs - Time-to-live in milliseconds (converted to seconds for Redis)
-   * @returns {Promise<boolean>} True if key was set
-   */
   async _setKeyIfNotExists(key, value, ttlMs) {
     let result;
     if (ttlMs) {

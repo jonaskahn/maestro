@@ -14,7 +14,7 @@
  * @exports {Class} AbstractMonitorService - Base class for backpressure monitoring services
  *
  * Example:
- *   const { AbstractProducer } = require("@/abstracts");
+ *   const { AbstractProducer } = require("./abstracts");
  */
 
 module.exports = {

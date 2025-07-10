@@ -5,33 +5,34 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Kafka Producer Implementation
+ * Kafka Producer Implementation.
  *
  * Concrete implementation of AbstractProducer using Kafka as the message broker.
  * Inherits all the rich functionality from AbstractProducer while providing
  * Kafka-specific message sending capabilities and native deduplication features.
  */
-const AbstractProducer = require("../../../abstracts/abstract-producer");
-const logger = require("../../../services/logger-service");
-
-// Using the new KafkaManager that combines utilities and client factory
+const { AbstractProducer } = require("../../../abstracts");
 const KafkaManager = require("./kafka-manager");
 const KafkaMonitorService = require("./kafka-monitor-service");
 const CacheClientFactory = require("../../cache/cache-client-factory");
+const logger = require("../../../services/logger-service");
 
 class KafkaProducer extends AbstractProducer {
-  #topic;
-  #groupId;
-  #clientOptions;
-  #producerOptions;
-  #producer;
+  _groupId;
+  _clientOptions;
+  _producerOptions;
+  _client;
+  _admin;
+  _producer;
 
   constructor(config = {}) {
     super(KafkaManager.standardizeConfig(config, "producer"));
-    this.#clientOptions = this.config.clientOptions;
-    this.#producerOptions = this.config.producerOptions;
-    this.#topic = this.config.topic;
-    this.#groupId = this.config.groupId;
+    this._clientOptions = this.config.clientOptions;
+    this._producerOptions = this.config.producerOptions;
+    this._groupId = this.config.groupId;
+    this._client = KafkaManager.createClient(this._clientOptions);
+    this._admin = KafkaManager.createAdmin(this._client, null);
+    this._producer = KafkaManager.createProducer(this._client, null, this._producerOptions);
   }
 
   _createCacheLayer(config = {}) {
@@ -49,52 +50,56 @@ class KafkaProducer extends AbstractProducer {
   }
 
   async _connectToMessageBroker() {
-    this.#producer = await KafkaManager.createProducer(null, this.#clientOptions, this.#producerOptions);
-    await this.#producer.connect();
+    await this._admin.connect();
+    await this._producer.connect();
   }
 
   async _disconnectFromMessageBroker() {
-    if (this.#producer) {
-      await this.#producer.disconnect();
-      this.#producer = null;
+    if (this._producer) {
+      await this._producer.disconnect();
+      this._producer = null;
     }
+    if (this._admin) {
+      await this._admin.disconnect();
+      this._admin = null;
+    }
+    this._client = null;
     logger.logConnectionEvent("KafkaProducer", "disconnected from Kafka broker");
   }
 
+  /**
+   * Gets the message type identifier
+   * @returns {string} Message type
+   */
   getMessageType() {
-    return this.#topic;
+    return this._topic;
   }
 
   /**
-   * Get the message broker type
+   * Gets the message broker type
    * @returns {string} Broker type
    */
   getBrokerType() {
     return "kafka";
   }
 
-  /**
-   * Create Kafka formatted messages from input items
-   * @param {Array<Object>} items - Array of items to be converted to Kafka messages
-   * @returns {Array<Object>} Array of Kafka formatted messages with key, value, headers, timestamp and partition
-   * @private
-   */
   _createBrokerMessages(items) {
     return KafkaManager.createMessages(items, this.getMessageType());
   }
 
-  /**
-   * Send messages to Kafka broker
-   * @param {Array<Object>} messages - Array of formatted Kafka messages
-   * @param {Object} _options - Additional send options (unused in this implementation)
-   * @returns {Promise<Object>} Result object containing sent status, broker result, and message counts
-   * @private
-   */
+  async _isTopicExisted() {
+    return await KafkaManager.isTopicExisted(this._admin, this._topic);
+  }
+
   async _sendMessagesToBroker(messages, _options) {
-    const sendOptions = this.#getSendOptions();
+    const sendOptions = {
+      acks: this._producerOptions.acks,
+      timeout: this._producerOptions.timeout,
+      compression: this._producerOptions.compression,
+    };
 
     const kafkaMessage = {
-      topic: this.#topic,
+      topic: this._topic,
       messages,
       acks: sendOptions.acks,
       timeout: sendOptions.timeout,
@@ -105,7 +110,7 @@ class KafkaProducer extends AbstractProducer {
     }
 
     try {
-      const result = await this.#producer.send(kafkaMessage);
+      const result = await this._producer.send(kafkaMessage);
       return {
         sent: true,
         result,
@@ -114,53 +119,16 @@ class KafkaProducer extends AbstractProducer {
         deduplicatedMessages: 0,
       };
     } catch (error) {
-      logger.logError(`Failed to send messages to topic '${this.#topic}'`, error);
+      logger.logError(`Failed to send messages to topic '${this._topic}'`, error);
       throw error;
     }
   }
 
   /**
-   * Get configured send options for Kafka producer
-   * @returns {Object} Send options with acks, timeout, and compression settings
-   * @private
+   * Gets unique identifier for an item
+   * @param {Object} item The item to get ID for
+   * @returns {string} Unique identifier
    */
-  #getSendOptions() {
-    const baseSendOptions = {
-      acks: this.#producerOptions.acks,
-      timeout: this.#producerOptions.timeout,
-    };
-
-    const compression = this.#getValidCompressionType(this.#producerOptions.compression);
-    if (compression) {
-      baseSendOptions.compression = compression;
-    }
-    return baseSendOptions;
-  }
-
-  /**
-   * Validate and normalize compression type
-   * @param {string} compression - Compression type to validate
-   * @returns {string|undefined} Valid compression type or undefined if invalid
-   * @private
-   */
-  #getValidCompressionType(compression) {
-    if (!compression || compression === "none") {
-      return undefined;
-    }
-
-    const validTypes = ["gzip", "snappy", "lz4", "zstd"];
-    const normalizedCompression = compression.toLowerCase();
-
-    if (validTypes.includes(normalizedCompression)) {
-      return normalizedCompression;
-    }
-
-    logger.logWarning(
-      `Invalid compression type "${compression}", falling back to no compression. Valid types: ${validTypes.join(", ")}`
-    );
-    return undefined;
-  }
-
   getItemId(item) {
     return item._id;
   }
@@ -168,10 +136,10 @@ class KafkaProducer extends AbstractProducer {
   _getStatusConfig() {
     return {
       ...super._getStatusConfig(),
-      kafkaProducerConnected: this.#producer !== null,
+      kafkaProducerConnected: this._producer !== null,
       backpressureMonitorEnabled: this.getBackpressureMonitor() !== null,
-      isIdempotent: this.#producerOptions.idempotent,
-      groupId: this.#groupId,
+      isIdempotent: this._producerOptions.idempotent,
+      groupId: this._groupId,
     };
   }
 }

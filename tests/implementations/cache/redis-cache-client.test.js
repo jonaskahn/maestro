@@ -73,8 +73,8 @@ describe("RedisCacheClient", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        JO_REDIS_URL: "redis://env-host:6379",
-        JO_REDIS_PASSWORD: "env-password",
+        MO_REDIS_URL: "redis://env-host:6379",
+        MO_REDIS_PASSWORD: "env-password",
       };
 
       redis.createClient.mockClear();
@@ -93,8 +93,8 @@ describe("RedisCacheClient", () => {
     it("should use defaults when neither config nor env vars are provided", () => {
       const originalEnv = process.env;
       const envVars = { ...process.env };
-      delete envVars.JO_REDIS_URL;
-      delete envVars.JO_REDIS_PASSWORD;
+      delete envVars.MO_REDIS_URL;
+      delete envVars.MO_REDIS_PASSWORD;
       process.env = envVars;
 
       redis.createClient.mockClear();
@@ -166,9 +166,9 @@ describe("RedisCacheClient", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        JO_REDIS_MAX_RETRY_ATTEMPTS: "3",
-        JO_REDIS_DELAY_MS: "500",
-        JO_REDIS_MAX_DELAY_MS: "2000",
+        MO_REDIS_MAX_RETRY_ATTEMPTS: "3",
+        MO_REDIS_DELAY_MS: "500",
+        MO_REDIS_MAX_DELAY_MS: "2000",
       };
 
       redis.createClient.mockClear();
