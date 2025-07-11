@@ -294,7 +294,7 @@ class AbstractProducer {
     try {
       await this.performDisconnection();
       this.#markAsDisconnected();
-      logger.logInfo(`${this.getBrokerType()} producer disconnected successfully`);
+      logger.logInfo(`${this.getBrokerType()} producer disconnected`);
     } catch (error) {
       logger.logError(`Error disconnecting ${this.getBrokerType()} producer`, error);
       throw error;
@@ -409,9 +409,9 @@ class AbstractProducer {
     return !items || items.length === 0;
   }
 
-  #creatEmptyResult() {
+  #creatEmptyResult(success) {
     return {
-      success: true,
+      success,
       messageType: this.getMessageType(),
       total: 0,
       sent: 0,
@@ -665,10 +665,6 @@ class AbstractProducer {
     logger.logInfo(`Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this._topic} topic`);
   }
 
-  async _createTopicIfAllowed() {
-    throw new Error(`_autoCreateTopic must be implemented by subclass`);
-  }
-
   /**
    * Produces messages based on item criteria
    * @param {Object} criteria Query criteria for items
@@ -677,29 +673,30 @@ class AbstractProducer {
    * @returns {Promise<Object>} Production result with counts and details
    */
   async produce(criteria, limit, options = {}) {
-    const emptyResult = this.#creatEmptyResult();
+    const successResult = this.#creatEmptyResult(true);
+    const errorResult = this.#creatEmptyResult(false);
     try {
       this.#ensureConnected();
       if (await this._topicExisted) {
         const isPressure = await this.#isMessageBrokerUnderPressure();
         if (isPressure) {
           logger.logWarning("☢️ System is under pressure, stop sending new items");
-          return emptyResult;
+          return successResult;
         }
         const excludedIds = await this.#getExcludedIds();
         const items = await this.getNextItems(criteria, limit, excludedIds);
         if (this.#itemNotFound(items)) {
-          return emptyResult;
+          return successResult;
         }
         const result = await this.#processItems(items, options);
         this.#logProductionSuccess(result);
         return result;
       }
       logger.logWarning(`Topic ${this._topic} seems does not existed`);
-      return emptyResult;
+      return successResult;
     } catch (error) {
       logger.logError(`Failed to produce messages to ${this._topic} topic`, error);
-      return emptyResult;
+      return errorResult;
     }
   }
 

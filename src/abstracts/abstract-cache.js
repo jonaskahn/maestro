@@ -18,7 +18,7 @@ const CacheConfig = TTLConfig.getCacheConfig();
 
 const KEY_SUFFIXES = {
   PROCESSING: "_PROCESSING:",
-  FREEZING: "_FREEZING:",
+  SUPPRESSION: "_SUPPRESSION:",
 };
 
 const CACHE_OPERATIONS = {
@@ -29,7 +29,7 @@ const CACHE_OPERATIONS = {
   SET_EXPIRY: "Set expiry",
   SET_PROCESSING: "Set processing key",
   REMOVE_PROCESSING: "Removed processing key",
-  SET_FREEZING: "Set freezing key",
+  SET_SUPPRESSION: "Set suppression key",
 };
 
 const CONNECTION_STATES = {
@@ -40,7 +40,7 @@ const CONNECTION_STATES = {
 const ENV_KEYS = {
   CACHE_KEY_PREFIX: ["MO_CACHE_KEY_PREFIX"],
   PROCESSING_SUFFIX: ["MO_CACHE_KEY_SUFFIXES_PROCESSING"],
-  FREEZING_SUFFIX: ["MO_CACHE_KEY_SUFFIXES_FREEZING"],
+  SUPPRESSION_SUFFIX: ["MO_CACHE_KEY_SUFFIXES_SUPPRESSION"],
 };
 
 /**
@@ -71,7 +71,7 @@ class AbstractCache {
     this.implementation = config.implementation;
 
     const processingKeySuffix = this.getEnvironmentValue(ENV_KEYS.PROCESSING_SUFFIX) || KEY_SUFFIXES.PROCESSING;
-    const freezingKeySuffix = this.getEnvironmentValue(ENV_KEYS.FREEZING_SUFFIX) || KEY_SUFFIXES.FREEZING;
+    const freezingKeySuffix = this.getEnvironmentValue(ENV_KEYS.SUPPRESSION_SUFFIX) || KEY_SUFFIXES.SUPPRESSION;
 
     this.config = {
       processingPrefix: `${config.keyPrefix}${processingKeySuffix}`,

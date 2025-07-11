@@ -86,7 +86,7 @@ class RedisCacheClient extends AbstractCache {
     });
 
     client.on("end", () => {
-      logger.logConnectionEvent("🔚 Redis", "client disconnected");
+      logger.logConnectionEvent("ℹ️ Redis", "client disconnected");
     });
 
     client.on("reconnecting", () => {

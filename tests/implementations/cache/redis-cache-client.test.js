@@ -78,7 +78,7 @@ describe("RedisCacheClient", () => {
       };
 
       redis.createClient.mockClear();
-      const envClient = new RedisCacheClient({ keyPrefix: "env-prefix:" });
+      new RedisCacheClient({ keyPrefix: "env-prefix:" });
 
       expect(redis.createClient).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -98,7 +98,7 @@ describe("RedisCacheClient", () => {
       process.env = envVars;
 
       redis.createClient.mockClear();
-      const defaultClient = new RedisCacheClient({ keyPrefix: "default-prefix:" });
+      new RedisCacheClient({ keyPrefix: "default-prefix:" });
 
       expect(redis.createClient).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -172,7 +172,7 @@ describe("RedisCacheClient", () => {
       };
 
       redis.createClient.mockClear();
-      const envClient = new RedisCacheClient({ keyPrefix: "env-prefix:" });
+      new RedisCacheClient({ keyPrefix: "env-prefix:" });
       const clientConfig = redis.createClient.mock.calls[0][0];
       const envRetryStrategy = clientConfig.retry_strategy;
 
@@ -185,17 +185,15 @@ describe("RedisCacheClient", () => {
 
   describe("Event Handlers", () => {
     it("should log error events", () => {
-      // Extract the error handler from the on('error') call
       const errorHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "error")[1];
       const testError = new Error("Test Redis error");
 
       errorHandler(testError);
 
-      expect(logger.logError).toHaveBeenCalledWith(expect.stringContaining("Redis _client error"), testError);
+      expect(logger.logError).toHaveBeenCalledWith(expect.stringContaining("Redis client error"), testError);
     });
 
     it("should log connection events", () => {
-      // Extract handlers for different connection events
       const connectHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "connect")[1];
       const readyHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "ready")[1];
       const endHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "end")[1];
@@ -206,10 +204,16 @@ describe("RedisCacheClient", () => {
       endHandler();
       reconnectingHandler();
 
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith(expect.stringContaining("Redis"), "_client connected");
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith(expect.stringContaining("Redis"), "_client ready");
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("Redis", expect.stringContaining("_client disconnected"));
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("Redis", expect.stringContaining("_client reconnecting"));
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith("ℹ️ Redis", expect.stringContaining("client connected"));
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith("ℹ️ Redis", expect.stringContaining("client ready"));
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith(
+        "ℹ️ Redis",
+        expect.stringContaining("client disconnected")
+      );
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith(
+        "🔄 Redis",
+        expect.stringContaining("_client reconnecting")
+      );
     });
   });
 

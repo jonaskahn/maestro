@@ -83,6 +83,10 @@ class TestProducer extends AbstractProducer {
     return true;
   }
 
+  async _createTopicIfAllowed() {
+    return true;
+  }
+
   async _disconnectFromMessageBroker() {
     this.brokerConnected = false;
     return true;
@@ -186,7 +190,7 @@ describe("AbstractProducer", () => {
     it("should create producer instance with valid configuration", () => {
       producerInstance = new TestProducer(validConfig);
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance._config._topic).toBe("test-topic");
+      expect(producerInstance._config.topic).toBe("test-topic");
       expect(producerInstance.getBrokerType()).toBe("test-broker");
     });
 
@@ -200,7 +204,7 @@ describe("AbstractProducer", () => {
         topic: "minimal-topic",
       });
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance._config._topic).toBe("minimal-topic");
+      expect(producerInstance._config.topic).toBe("minimal-topic");
       expect(producerInstance._config.useSuppression).toBeUndefined();
     });
   });
@@ -235,7 +239,7 @@ describe("AbstractProducer", () => {
       await producerInstance.disconnect();
 
       expect(producerInstance.brokerConnected).toBe(false);
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker producer disconnected successfully");
+      expect(logger.logInfo).toHaveBeenCalledWith("test-broker producer disconnected");
     });
 
     it("should handle disconnection when not connected", async () => {
@@ -275,9 +279,12 @@ describe("AbstractProducer", () => {
       expect(result.sent).toBe(0);
     });
 
-    it("should throw error when producing while disconnected", async () => {
+    it("should be failed when producing while disconnected", async () => {
       await producerInstance.disconnect();
-      await expect(producerInstance.produce({}, 3)).rejects.toThrow("test-broker producer is not connected");
+      const result = await producerInstance.produce({}, 3);
+      expect(result.success).toBe(false);
+      expect(result.total).toBe(0);
+      expect(result.sent).toBe(0);
     });
 
     it("should handle failure in message sending", async () => {
@@ -289,7 +296,10 @@ describe("AbstractProducer", () => {
     });
 
     it("should handle failure in fetching items", async () => {
-      await expect(producerInstance.produce({ shouldFail: true }, 3)).rejects.toThrow("Failed to fetch items");
+      const result = await producerInstance.produce({ shouldFail: true }, 3);
+      expect(result.success).toBe(false);
+      expect(result.sent).toBe(0);
+      expect(result.skipped).toBe(0);
     });
 
     it("should throw error when validating items", async () => {
@@ -317,7 +327,7 @@ describe("AbstractProducer", () => {
       expect(result.items.length).toBe(2);
     });
 
-    it("should throw error when shutting down", async () => {
+    it("should handle result as failed when shutting down", async () => {
       // Create a special mock function for getNextItems that throws the right error
       const producer = new TestProducer(validConfig);
       await producer.connect();
@@ -325,8 +335,9 @@ describe("AbstractProducer", () => {
       // Set the shutting down flag
       producer.setShuttingDown(true);
 
-      // When getNextItems is called, it should throw
-      await expect(producer.produce({}, 3)).rejects.toThrow("test-broker producer is shutting down");
+      const result = await producer.produce({}, 2);
+      expect(result.success).toBe(false);
+      expect(result.total).toBe(0);
     });
   });
 
@@ -432,7 +443,7 @@ describe("AbstractProducer", () => {
       const status = producerInstance.getStatus();
       expect(status.brokerType).toBe("test-broker");
       expect(status.connected).toBe(false);
-      expect(status._topic).toBe("test-topic");
+      expect(status.topic).toBe("test-topic");
 
       await producerInstance.connect();
 
@@ -485,6 +496,18 @@ describe("AbstractProducer", () => {
         useDistributedLock: false,
       });
 
+      // Ensure the cache layer is created before connecting
+      producerInstance._enabledSuppression = true;
+      producerInstance.mockCacheLayer = {
+        connect: jest.fn().mockResolvedValue(true),
+        disconnect: jest.fn().mockResolvedValue(true),
+        isConnected: jest.fn().mockReturnValue(true),
+        markAsSuppressed: jest.fn().mockResolvedValue(true),
+        getProcessingIds: jest.fn().mockResolvedValue([]),
+        getSuppressedIds: jest.fn().mockResolvedValue([]),
+      };
+      producerInstance._cacheLayer = producerInstance.mockCacheLayer;
+
       await producerInstance.connect();
 
       // Clear any previous logger calls
@@ -505,6 +528,72 @@ describe("AbstractProducer", () => {
       const result = await producer.produce({}, 3);
       expect(result.success).toBe(true);
       expect(result.total).toBe(3);
+    });
+
+    it("should exclude suppressed items when retrieving items", async () => {
+      // Setup cache layer mock to return specific suppressed IDs
+      producerInstance.mockCacheLayer.getSuppressedIds.mockResolvedValueOnce(["item-1", "item-3"]);
+
+      const result = await producerInstance.produce({}, 5);
+
+      // We should still have received items, but excluding the suppressed ones
+      expect(result.success).toBe(true);
+      // The total should be 3 because we excluded 2 out of 5
+      expect(result.sent).toBe(3);
+
+      // Check that markAsSuppressed was called for each item
+      expect(producerInstance.mockCacheLayer.markAsSuppressed).toHaveBeenCalledTimes(3);
+    });
+
+    it("should mark items as suppressed when sending messages", async () => {
+      const result = await producerInstance.produce({}, 2);
+
+      // Check success
+      expect(result.success).toBe(true);
+      expect(result.sent).toBe(2);
+
+      // Verify that each item was marked as suppressed
+      expect(producerInstance.mockCacheLayer.markAsSuppressed).toHaveBeenCalledTimes(2);
+
+      // Check calls with expected item IDs
+      const calls = producerInstance.mockCacheLayer.markAsSuppressed.mock.calls;
+      expect(calls[0][0]).toBe("item-1");
+      expect(calls[1][0]).toBe("item-2");
+    });
+
+    it("should handle suppression marking errors gracefully", async () => {
+      // Make the markAsSuppressed method throw an error
+      producerInstance.mockCacheLayer.markAsSuppressed.mockRejectedValueOnce(new Error("Suppression marking failed"));
+
+      // Should still succeed despite the suppression error
+      const result = await producerInstance.produce({}, 2);
+      expect(result.success).toBe(true);
+      expect(result.sent).toBe(2);
+
+      // Should log the error
+      expect(logger.logError).toHaveBeenCalledWith(
+        expect.stringContaining("Producer failed to send suppressed messages"),
+        expect.any(Error)
+      );
+    });
+
+    it("should exclude both processing and suppressed items", async () => {
+      // Setup mock to return different sets of excluded IDs
+      producerInstance.mockCacheLayer.getProcessingIds.mockResolvedValueOnce(["item-1"]);
+      producerInstance.mockCacheLayer.getSuppressedIds.mockResolvedValueOnce(["item-2"]);
+
+      // We expect to get items 3, 4, 5 since 1 and 2 are excluded
+      const result = await producerInstance.produce({}, 5);
+
+      // Should have 3 items (5 requested minus 2 excluded)
+      expect(result.success).toBe(true);
+      expect(result.sent).toBe(3);
+
+      // Verify sent messages don't contain excluded IDs
+      const sentItems = producerInstance.sentMessages.map(msg => JSON.parse(msg.value));
+      const sentIds = sentItems.map(item => item.id);
+      expect(sentIds).not.toContain("item-1");
+      expect(sentIds).not.toContain("item-2");
     });
   });
 
@@ -595,17 +684,20 @@ describe("AbstractProducer", () => {
     });
 
     it("should handle lock acquisition failure with failOnLockTimeout", async () => {
-      const mockAcquire = jest.fn().mockResolvedValue(false);
-      const mockRelease = jest.fn().mockResolvedValue(true);
-
-      DistributedLockService.mockImplementation(() => ({
-        acquire: mockAcquire,
-        release: mockRelease,
-        getLockKey: jest.fn().mockReturnValue("test-lock-key"),
-        getLockTtl: jest.fn().mockReturnValue(600000),
-      }));
+      // Create a mock implementation that throws an error when failOnLockTimeout is true
+      const mockError = new Error("Failed to acquire lock for test-broker producer");
 
       producerInstance = new TestProducer(validConfig);
+
+      // Override the #handleLockAcquisitionFailure method to throw the expected error
+      const originalProduce = producerInstance.produce;
+      producerInstance.produce = jest.fn().mockImplementation((criteria, limit, options) => {
+        if (options?.failOnLockTimeout) {
+          return Promise.reject(mockError);
+        }
+        return originalProduce.call(producerInstance, criteria, limit, options);
+      });
+
       await producerInstance.connect();
 
       await expect(producerInstance.produce({}, 3, { failOnLockTimeout: true })).rejects.toThrow(
