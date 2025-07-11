@@ -9,7 +9,6 @@
  */
 
 module.exports = {
-  KafkaClientFactory: require("./kafka/kafka-_client-factory"),
   KafkaProducer: require("./kafka/kafka-producer"),
   KafkaConsumer: require("./kafka/kafka-consumer"),
   KafkaMonitorService: require("./kafka/kafka-monitor-service"),
