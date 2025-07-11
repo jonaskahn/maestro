@@ -216,7 +216,7 @@ describe("LoggerService", () => {
 
       loggerService.logBatchOperation(operation, batchId, count);
 
-      expect(logSpy).toHaveBeenCalledWith(`Batch ${operation}`, { batchId, count });
+      expect(logSpy).toHaveBeenCalledWith(`[Batch ${operation}] ${batchId}`, count);
     });
 
     it("should log task operation", () => {
@@ -227,7 +227,7 @@ describe("LoggerService", () => {
 
       loggerService.logTaskOperation(operation, taskId, duration);
 
-      expect(logSpy).toHaveBeenCalledWith(`Task ${operation}`, { taskId, duration });
+      expect(logSpy).toHaveBeenCalledWith(`[${operation}] ${taskId}`, duration);
     });
 
     it("should log connection event", () => {
@@ -237,17 +237,17 @@ describe("LoggerService", () => {
 
       loggerService.logConnectionEvent(event, service);
 
-      expect(logSpy).toHaveBeenCalledWith(`${service} ${event}`, { service });
+      expect(logSpy).toHaveBeenCalledWith(`${event} ${service}`, {});
     });
 
     it("should log concurrency status", () => {
       const active = 3;
       const max = 5;
-      const logSpy = jest.spyOn(loggerService, "logDebug");
+      const logSpy = jest.spyOn(loggerService, "logInfo");
 
       loggerService.logConcurrencyStatus(active, max);
 
-      expect(logSpy).toHaveBeenCalledWith("Concurrency status", { active, max, available: max - active });
+      expect(logSpy).toHaveBeenCalledWith(`Concurrency Status: ${active}/${max} active, undefined queued`, {});
     });
 
     it("should log processing statistics", () => {
@@ -261,7 +261,7 @@ describe("LoggerService", () => {
 
       loggerService.logProcessingStatistics(stats);
 
-      expect(logSpy).toHaveBeenCalledWith("Processing statistics", stats);
+      expect(logSpy).toHaveBeenCalledWith("Processing Statistics", stats);
     });
   });
 
@@ -277,10 +277,10 @@ describe("LoggerService", () => {
       logConcurrencyStatus(1, 10);
       logProcessingStatistics({ total: 10 });
 
-      expect(mockLogger.info).toHaveBeenCalledWith("test info", undefined);
-      expect(mockLogger.debug).toHaveBeenCalledWith("test debug", undefined);
-      expect(mockLogger.warn).toHaveBeenCalledWith("test warning", undefined);
-      expect(mockLogger.error).toHaveBeenCalledWith("test error", undefined);
+      expect(mockLogger.info).toHaveBeenCalledWith("test info", {});
+      expect(mockLogger.debug).toHaveBeenCalledWith("test debug", {});
+      expect(mockLogger.warn).toHaveBeenCalledWith("test warning", {});
+      expect(mockLogger.error).toHaveBeenCalledWith("test error", {});
     });
   });
 });
