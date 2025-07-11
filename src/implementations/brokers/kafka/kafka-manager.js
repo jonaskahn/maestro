@@ -16,6 +16,7 @@
 const { Kafka, CompressionTypes, Partitioners } = require("kafkajs");
 const TTLConfig = require("../../../config/ttl-config");
 const logger = require("../../../services/logger-service");
+const { config } = require("dotenv");
 
 const KAFKA_TTL_CONFIG = TTLConfig.getKafkaConfig();
 
@@ -63,7 +64,7 @@ class KafkaManager {
     return {
       sessionTimeout: parseInt(process.env.MO_KAFKA_CONSUMER_SESSION_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL,
       rebalanceTimeout:
-        parseInt(process.env.MO_KAFKA_CONSUMER_REBALANCE_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL * 2,
+        parseInt(process.env.MO_KAFKA_CONSUMER_REBALANCE_TIMEOUT) || ttlValues.TASK_PROCESSING_STATE_TTL * 5,
       heartbeatInterval:
         parseInt(process.env.MO_KAFKA_CONSUMER_HEARTBEAT_INTERVAL) || ttlValues.TASK_PROCESSING_STATE_TTL / 10,
       maxBytesPerPartition: parseInt(process.env.MO_KAFKA_CONSUMER_MAX_BYTES_PER_PARTITION) || 1048576,
@@ -71,11 +72,15 @@ class KafkaManager {
       maxBytes: parseInt(process.env.MO_KAFKA_CONSUMER_MAX_BYTES) || 10485760,
       maxWaitTimeInMs:
         parseInt(process.env.MO_KAFKA_CONSUMER_MAX_WAIT_TIME_MS) || KAFKA_TTL_CONFIG.connectionTimeout * 5,
-      allowAutoTopicCreation: process.env.MO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
-      autoCommit: process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT !== "false",
-      autoCommitInterval: parseInt(process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL) || 5000,
       fromBeginning: process.env.MO_KAFKA_CONSUMER_FROM_BEGINNING !== "false",
-      maxInFlightRequests: parseInt(process.env.MO_KAFKA_CONSUMER_MAX_IN_FLIGHT_REQUESTS) || 1,
+      maxInFlightRequests: parseInt(process.env.MO_KAFKA_CONSUMER_MAX_IN_FLIGHT_REQUESTS) || null,
+      retry: {
+        initialRetryTime: 300,
+        retries: parseInt(process.env.MO_KAFKA_CONSUMER_RETRIES) || 5,
+        factor: 0.2,
+        multiplier: 2,
+        maxRetryTime: 30000,
+      },
     };
   }
 
@@ -90,13 +95,12 @@ class KafkaManager {
       compression: KafkaManager.getCompressionType(process.env.MO_KAFKA_COMPRESSION_TYPE) || CompressionTypes.None,
       idempotent: process.env.MO_KAFKA_PRODUCER_IDEMPOTENT === "true",
       maxInFlightRequests: parseInt(process.env.MO_KAFKA_PRODUCER_MAX_IN_FLIGHT_REQUESTS) || 5,
-      allowAutoTopicCreation: process.env.MO_KAFKA_ALLOW_AUTO_TOPIC_CREATION !== "false",
       transactionTimeout:
         parseInt(process.env.MO_KAFKA_PRODUCER_TRANSACTION_TIMEOUT) || KAFKA_TTL_CONFIG.requestTimeout * 2,
       retries: parseInt(process.env.MO_KAFKA_PRODUCER_RETRIES) || 10,
       retry: {
         initialRetryTime: 300,
-        retries: parseInt(process.env.MO_KAFKA_PRODUCER_RETRIES) || 10,
+        retries: parseInt(process.env.MO_KAFKA_PRODUCER_RETRIES) || 5,
         factor: 0.2,
         multiplier: 2,
         maxRetryTime: 30000,
@@ -166,6 +170,27 @@ class KafkaManager {
     return kafkaClient.consumer(consumerOptions);
   }
 
+  static async createTopic(admin, topic, topicOptions) {
+    try {
+      const result = await admin.createTopics({
+        topics: [
+          {
+            topic,
+            numPartitions: topicOptions.partitions,
+            replicationFactor: topicOptions.replicationFactor,
+          },
+        ],
+      });
+      logger.logDebug(
+        `Topic ${topic} created ${result ? "successfully" : "failed"} with ${JSON.stringify(topicOptions, null, 2)}`
+      );
+      return result;
+    } catch (error) {
+      logger.logWarning(`🧤 Kafka topic [ ${topic} ] failed to create. Due ${error.message}`);
+      return false;
+    }
+  }
+
   static async isTopicExisted(admin, topic) {
     try {
       const metadata = await admin.fetchTopicMetadata({
@@ -198,27 +223,6 @@ class KafkaManager {
   }
 
   /**
-   * Enriches configuration with cache instance if cacheOptions are provided but no cacheInstance exists
-   * @param {Object} config - The broker configuration
-   * @returns {Object} Enhanced configuration with cache instance
-   */
-  static enrichConfig(config) {
-    config.brokerOptions = config.brokerOptions || {};
-    config.brokerOptions.clientOptions = config.brokerOptions.clientOptions || {};
-    config.brokerOptions.consumerOptions = config.brokerOptions.consumerOptions || {};
-    config.brokerOptions.producerOptions = config.brokerOptions.producerOptions || {};
-
-    if (!config.groupId && config.topic) {
-      config.groupId = `${config.topic}-consumer-group-processors`;
-    }
-
-    if (!config.brokerOptions.clientOptions.clientId) {
-      config.brokerOptions.clientOptions.clientId = `${config.topic}.client.${new Date().getTime()}`;
-    }
-    return config;
-  }
-
-  /**
    * Merge Kafka configuration with smart defaults
    * @param {Object} userConfig - User provided configuration
    * @param {string} userConfig.topic - The Kafka topic name
@@ -235,7 +239,7 @@ class KafkaManager {
    */
   static standardizeConfig(userConfig = {}, type) {
     const { brokerOptions = {} } = userConfig;
-    const { clientOptions = {}, consumerOptions = {}, producerOptions = {} } = brokerOptions;
+    const { cacheOptions = {}, clientOptions = {}, consumerOptions = {}, producerOptions = {} } = brokerOptions;
 
     const mergedClientOptions = {
       ...this.CLIENT_DEFAULTS,
@@ -257,14 +261,43 @@ class KafkaManager {
     userConfig.groupId = consumerOptions.groupId ?? userConfig.groupId ?? `${userConfig.topic}-processors`;
     const standardizeConfig = {
       topic: userConfig.topic,
+      topicOptions: {
+        partitions:
+          parseInt(userConfig.topicOptions?.partitions) || parseInt(process.env.MO_KAFKA_TOPIC_PARTITIONS) || 5,
+        replicationFactor:
+          parseInt(userConfig.topicOptions?.replicationFactor) ||
+          parseInt(process.env.MO_KAFKA_TOPIC_REPLICATION_FACTOR) ||
+          1,
+        allowAutoTopicCreation:
+          userConfig.topicOptions?.allowAutoTopicCreation !== "false" ||
+          process.env.MO_KAFKA_TOPIC_AUTO_CREATION !== "false" ||
+          true,
+      },
       groupId: userConfig.groupId,
       cacheOptions: userConfig.cacheOptions ?? {},
       clientOptions: mergedClientOptions,
     };
 
+    const processingTtl = userConfig.cacheOptions.processingTtl;
+    const freezingTtl = userConfig.cacheOptions.freezingTtl ?? userConfig.cacheOptions.processingTtl * 5;
+    if (freezingTtl <= processingTtl) {
+      throw new Error(`Processing time must be less then Freezing time`);
+    }
+    cacheOptions.processingTtl = processingTtl;
+    cacheOptions.freezingTtl = freezingTtl;
+
+    standardizeConfig.cacheOptions = {
+      ...userConfig.cacheOptions,
+      ...cacheOptions,
+    };
+
     if (type === "consumer") {
       standardizeConfig.maxConcurrency =
-        userConfig.maxConcurrency || parseInt(process.env.MO_MAX_CONCURRENT_MESSAGES) || 1;
+        parseInt(userConfig?.maxConcurrency) || parseInt(process.env.MO_MAX_CONCURRENT_MESSAGES) || 1;
+      standardizeConfig.eachBatchAutoResolve = process.env.MO_KAFKA_CONSUMER_EACH_BATCH_AUTO_RESOLVE !== "false";
+      standardizeConfig.autoCommit = process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT !== "false";
+      standardizeConfig.autoCommitInterval = parseInt(process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL) || 5000;
+      standardizeConfig.autoCommitThreshold = parseInt(process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT_THRESHOLD) || 100;
       standardizeConfig.consumerOptions = {
         groupId: userConfig.groupId,
         ...this.CONSUMER_DEFAULTS,
@@ -277,7 +310,10 @@ class KafkaManager {
         ...this.PRODUCER_DEFAULTS,
         ...producerOptions,
       };
-      standardizeConfig.maxLag = userConfig.maxLag;
+      standardizeConfig.lagThreshold =
+        userConfig.lagThreshold || parseInt(process.env.MO_KAFKA_PRODUCER_LAG_THRESHOLD) || 1000;
+      standardizeConfig.lagMonitorInterval =
+        userConfig.lagMonitorInterval || parseInt(process.env.MO_KAFKA_PRODUCER_LAG_INTERVAL) || 5000;
       standardizeConfig.useSuppression = userConfig.useSuppression !== "false";
       standardizeConfig.useDistributedLock = userConfig.useDistributedLock !== "false";
     }

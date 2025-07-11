@@ -29,7 +29,7 @@ class OrderProducer extends DefaultProducer {
   constructor(config = {}) {
     super({
       topic: config.topic || "ecommerce-orders",
-      maxLag: config.maxLag || 50,
+      lagThreshold: config.lagThreshold || 50,
       cacheOptions: {
         keyPrefix: config.keyPrefix || "ECOMMERCE",
         processingTtl: config.processingTtl || 240_000,

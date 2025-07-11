@@ -19,6 +19,7 @@ const logger = require("../../../services/logger-service");
 
 class KafkaProducer extends AbstractProducer {
   _groupId;
+  _topicOptions;
   _clientOptions;
   _producerOptions;
   _admin;
@@ -26,6 +27,7 @@ class KafkaProducer extends AbstractProducer {
 
   constructor(config = {}) {
     super(KafkaManager.standardizeConfig(config, "producer"));
+    this._topicOptions = this._config.topicOptions || {};
     this._clientOptions = this._config.clientOptions;
     this._producerOptions = this._config.producerOptions;
     this._groupId = this._config.groupId;
@@ -39,8 +41,8 @@ class KafkaProducer extends AbstractProducer {
     return new KafkaMonitorService({
       topic: config.topic,
       groupId: config.groupId,
-      maxLag: config.maxLag || 1_000,
-      checkInterval: config.checkLagInterval || 60_000,
+      lagThreshold: config.lagThreshold || 1_000,
+      checkInterval: config.lagMonitorInterval || 60_000,
       clientOptions: config.clientOptions,
     });
   }
@@ -126,8 +128,14 @@ class KafkaProducer extends AbstractProducer {
     }
   }
 
-  async _isTopicExisted() {
-    return await KafkaManager.isTopicExisted(this._admin, this._topic);
+  async _createTopicIfAllowed() {
+    if (await KafkaManager.isTopicExisted(this._admin, this._topic)) {
+      return true;
+    }
+    if (this._topicOptions.allowAutoTopicCreation) {
+      return await KafkaManager.createTopic(this._admin, this._topic, this._topicOptions);
+    }
+    return false;
   }
 
   getItemId(item) {

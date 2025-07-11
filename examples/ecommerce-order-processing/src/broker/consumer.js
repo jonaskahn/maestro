@@ -9,9 +9,9 @@ const database = require("../database/mongodb-client");
 const Logger = require("../utils/logger");
 
 const SIMULATION_DELAYS = {
-  INVENTORY_CHECK: 100,
-  PAYMENT_PROCESSING: 60_000,
-  ORDER_VALIDATION: 120_000,
+  INVENTORY_CHECK: 500,
+  PAYMENT_PROCESSING: 3_000,
+  ORDER_VALIDATION: 8_000,
 };
 
 class OrderConsumer extends DefaultConsumer {

@@ -101,8 +101,8 @@ class AbstractConsumer {
   }
 
   #setBasicConfiguration(config) {
-    this.topic = config.topic;
-    this.config = config;
+    this._topic = config.topic;
+    this._config = config;
   }
 
   #setConcurrencyConfiguration(config) {
@@ -184,14 +184,14 @@ class AbstractConsumer {
     try {
       await this._stopConsumingFromBroker();
       this.#markAsNotConsuming();
-      logger.logInfo(`${this.getBrokerType()} consumer stopped consuming from ${this.topic}`);
+      logger.logInfo(`${this.getBrokerType()} consumer stopped consuming from ${this._topic}`);
 
       if (this._statusReportTimer) {
         clearInterval(this._statusReportTimer);
         this._statusReportTimer = null;
       }
     } catch (error) {
-      logger.logError(`Error stopping consumption from ${this.topic}`, error);
+      logger.logError(`Error stopping consumption from ${this._topic}`, error);
     }
   }
 
@@ -287,7 +287,7 @@ class AbstractConsumer {
 
   _logConfigurationLoaded() {
     logger.logDebug(
-      `🐞 ${this.getBrokerType()?.toUpperCase()} Consumer loaded with configuration ${JSON.stringify(this.config, null, 2)}`
+      `🐞 ${this.getBrokerType()?.toUpperCase()} Consumer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
     );
   }
 
@@ -338,11 +338,18 @@ class AbstractConsumer {
     }
     try {
       await this.#establishConnection();
+      await this._createTopicIfAllowed();
       this.#markAsConnected();
     } catch (error) {
       this.#handleConnectionError(error);
       throw error;
     }
+  }
+
+  async _createTopicIfAllowed() {
+    logger.logWarning(
+      `You see this log because you do not implemented _createTopicIfAllowed in Consumer. But it's safe to ignore`
+    );
   }
 
   #markAsDisconnected() {
@@ -392,7 +399,7 @@ class AbstractConsumer {
 
   _handleConsumingStartError(error) {
     this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
-    logger.logError(`Failed to start consuming from ${this.topic}`, error);
+    logger.logError(`Failed to start consuming from ${this._topic}`, error);
   }
 
   #startStatusReporting() {
@@ -425,7 +432,7 @@ class AbstractConsumer {
     try {
       await this._startConsumingFromBroker(options);
       this._isConsuming = CONSUMER_STATES.CONSUMING;
-      logger.logInfo(`${this.getBrokerType()} consumer started consuming from ${this.topic}`);
+      logger.logInfo(`${this.getBrokerType()} consumer started consuming from ${this._topic}`);
 
       if (this._statusReportInterval > 0) {
         this.#startStatusReporting();
@@ -569,7 +576,7 @@ class AbstractConsumer {
     const uptime = Date.now() - this.metrics[METRICS_PROPERTIES.START_TIME];
 
     return {
-      topic: this.topic,
+      topic: this._topic,
       maxConcurrency: this.maxConcurrency,
       isConsuming: this.#isCurrentlyConsuming(),
       cacheConnected: this.#isCacheConnected(),

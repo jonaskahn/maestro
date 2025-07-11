@@ -58,7 +58,8 @@ class AbstractMonitorService {
     }
 
     this.config = {
-      maxLag: config.maxLag || this.getEnvironmentValueOrDefault(ENV_KEYS.MAX_LAG, DEFAULT_VALUES.MAX_LAG_THRESHOLD),
+      lagThreshold:
+        config.lagThreshold || this.getEnvironmentValueOrDefault(ENV_KEYS.MAX_LAG, DEFAULT_VALUES.MAX_LAG_THRESHOLD),
       enabledResourceLag:
         config.enabledResourceLag ||
         this.getEnvironmentValueOrDefault(ENV_KEYS.ENABLED_RESOURCE_LAG, DEFAULT_VALUES.ENABLED_RESOURCE_LAG),
@@ -75,8 +76,8 @@ class AbstractMonitorService {
 
     logger.logInfo(`ℹ️ Backpressure monitor configured for ${this.getBrokerType()}`);
     logger.logDebug("ℹ️ Backpressure monitor configuration", {
-      maxLag: this.config.maxLag,
-      checkInterval: this.config.checkInterval,
+      lagThreshold: this.config.lagThreshold,
+      checkInterval: this.config.lagMonitorInterval,
       rateLimitThreshold: this.config.rateLimitThreshold,
     });
   }
@@ -173,7 +174,7 @@ class AbstractMonitorService {
         totalLag: 0,
         maxPartitionLag: 0,
         avgLag: 0,
-        lagThreshold: this.config.maxLag,
+        lagThreshold: this.config.lagThreshold,
       };
     }
   }
@@ -237,7 +238,7 @@ class AbstractMonitorService {
     if (!metrics || !metrics.totalLag) {
       return BACKPRESSURE_LEVELS.NONE;
     }
-    const lagRatio = metrics.totalLag / this.config.maxLag;
+    const lagRatio = metrics.totalLag / this.config.lagThreshold;
 
     if (lagRatio > 1.0) return BACKPRESSURE_LEVELS.CRITICAL;
     if (lagRatio > 0.8) return BACKPRESSURE_LEVELS.HIGH;
@@ -348,7 +349,7 @@ class AbstractMonitorService {
             total: metrics.totalLag,
             max: metrics.maxPartitionLag,
             average: metrics.avgLag,
-            threshold: this.config.maxLag,
+            threshold: this.config.lagThreshold,
           },
           resources: {
             memory: metrics.memoryUsage,

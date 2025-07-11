@@ -186,7 +186,7 @@ describe("AbstractProducer", () => {
     it("should create producer instance with valid configuration", () => {
       producerInstance = new TestProducer(validConfig);
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance._config.topic).toBe("test-topic");
+      expect(producerInstance._config._topic).toBe("test-topic");
       expect(producerInstance.getBrokerType()).toBe("test-broker");
     });
 
@@ -200,7 +200,7 @@ describe("AbstractProducer", () => {
         topic: "minimal-topic",
       });
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance._config.topic).toBe("minimal-topic");
+      expect(producerInstance._config._topic).toBe("minimal-topic");
       expect(producerInstance._config.useSuppression).toBeUndefined();
     });
   });
@@ -445,7 +445,7 @@ describe("AbstractProducer", () => {
       const status = producerInstance.getStatus();
       expect(status.brokerType).toBe("test-broker");
       expect(status.connected).toBe(false);
-      expect(status.topic).toBe("test-topic");
+      expect(status._topic).toBe("test-topic");
 
       await producerInstance.connect();
 

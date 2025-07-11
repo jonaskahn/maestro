@@ -74,7 +74,7 @@ class AbstractProducer {
 
   #initializeConfiguration(config) {
     this._topic = config.topic;
-    this._topicExisted = true;
+    this._topicExisted = false;
     this._enabledSuppression = config.useSuppression;
     this._enabledDistributedLock = config.useDistributedLock;
     this._config = config;
@@ -219,12 +219,25 @@ class AbstractProducer {
 
     try {
       await this.performConnection();
+      await this.#processAfterConnected();
+      await this._createTopicIfAllowed();
       this.#markAsConnected();
     } catch (error) {
       this.#markAsDisconnected();
       logger.logError(`Failed to connect ${this.getBrokerType()} producer`, error);
       throw error;
     }
+  }
+
+  async #processAfterConnected() {
+    this._topicExisted = await this._createTopicIfAllowed();
+  }
+
+  async _createTopicIfAllowed() {
+    logger.logWarning(
+      `You see this log because you do not implemented _createTopicIfAllowed in Producer. But it's safe to ignore`
+    );
+    return true;
   }
 
   async _disconnectFromMessageBroker() {
@@ -652,6 +665,10 @@ class AbstractProducer {
     logger.logInfo(`Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this._topic} topic`);
   }
 
+  async _createTopicIfAllowed() {
+    throw new Error(`_autoCreateTopic must be implemented by subclass`);
+  }
+
   /**
    * Produces messages based on item criteria
    * @param {Object} criteria Query criteria for items
@@ -663,23 +680,23 @@ class AbstractProducer {
     const emptyResult = this.#creatEmptyResult();
     try {
       this.#ensureConnected();
-      if (!(await this.#hasTopic())) {
-        logger.logDebug(`No ${this._topic} existed, safely ignore this time`);
-        return emptyResult;
+      if (await this._topicExisted) {
+        const isPressure = await this.#isMessageBrokerUnderPressure();
+        if (isPressure) {
+          logger.logWarning("☢️ System is under pressure, stop sending new items");
+          return emptyResult;
+        }
+        const excludedIds = await this.#getExcludedIds();
+        const items = await this.getNextItems(criteria, limit, excludedIds);
+        if (this.#itemNotFound(items)) {
+          return emptyResult;
+        }
+        const result = await this.#processItems(items, options);
+        this.#logProductionSuccess(result);
+        return result;
       }
-      const isPressure = await this.#isMessageBrokerUnderPressure();
-      if (isPressure) {
-        logger.logWarning("☢️ System is under pressure, stop sending new items");
-        return emptyResult;
-      }
-      const excludedIds = await this.#getExcludedIds();
-      const items = await this.getNextItems(criteria, limit, excludedIds);
-      if (this.#itemNotFound(items)) {
-        return emptyResult;
-      }
-      const result = await this.#processItems(items, options);
-      this.#logProductionSuccess(result);
-      return result;
+      logger.logWarning(`Topic ${this._topic} seems does not existed`);
+      return emptyResult;
     } catch (error) {
       logger.logError(`Failed to produce messages to ${this._topic} topic`, error);
       return emptyResult;
@@ -694,26 +711,6 @@ class AbstractProducer {
     if (!this.#isAlreadyConnected()) {
       throw new Error(`${this.getBrokerType()} producer is not connected`);
     }
-  }
-
-  async #hasTopic() {
-    try {
-      if (this._topicExisted) {
-        return true;
-      }
-      this._topicExisted = await this._isTopicExisted();
-      return this._topicExisted;
-    } catch (error) {
-      logger.logWarning(
-        `Failed to check topic [ ${this._topic} ] existed or not, safely ignore as none. Due ${error.message}`
-      );
-      return false;
-    }
-  }
-
-  async _isTopicExisted() {
-    logger.logWarning(`This should be implemented in subclass, otherwise assume it yes`);
-    return true;
   }
 
   #isCacheConnected() {
@@ -752,7 +749,7 @@ class AbstractProducer {
       cacheConnected: this.#isCacheConnected(),
       topic: this._topic,
       enabledSuppression: this.#isSuppressionFullyEnabled(),
-      _config: this._getStatusConfig(),
+      config: this._getStatusConfig(),
       lock: this.#getLockStatus(),
     };
   }

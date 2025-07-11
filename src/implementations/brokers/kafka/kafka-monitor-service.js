@@ -54,7 +54,7 @@ class KafkaMonitorService extends AbstractMonitorService {
         totalLag,
         maxPartitionLag: totalLag,
         avgLag: totalLag,
-        lagThreshold: this.config.maxLag,
+        lagThreshold: this.config.lagThreshold,
       };
     } catch (error) {
       logger.logError(`‼️ Failed monitoring current consumer for topic ${this._topic} lag:`, error);

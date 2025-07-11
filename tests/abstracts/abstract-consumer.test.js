@@ -148,7 +148,7 @@ describe("AbstractConsumer", () => {
     it("should create consumer instance with valid configuration", () => {
       consumerInstance = new TestConsumer(validConfig);
       expect(consumerInstance).toBeInstanceOf(TestConsumer);
-      expect(consumerInstance.topic).toBe("test-topic");
+      expect(consumerInstance._topic).toBe("test-topic");
       expect(consumerInstance.maxConcurrency).toBe(3);
       expect(consumerInstance.getBrokerType()).toBe("test-broker");
     });

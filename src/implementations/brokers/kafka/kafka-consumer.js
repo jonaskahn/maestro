@@ -16,9 +16,11 @@ const CacheClientFactory = require("../../cache/cache-client-factory");
 const logger = require("../../../services/logger-service");
 
 class KafkaConsumer extends AbstractConsumer {
+  _topicOptions;
   _groupId;
   _clientOptions;
   _consumerOptions;
+  _admin;
   _consumer;
 
   /**
@@ -33,9 +35,11 @@ class KafkaConsumer extends AbstractConsumer {
    */
   constructor(config) {
     super(KafkaManager.standardizeConfig(config, "consumer"));
-    this._groupId = this.config.groupId;
-    this._clientOptions = this.config.clientOptions;
-    this._consumerOptions = this.config.consumerOptions;
+    this._topicOptions = this._config.topicOptions;
+    this._groupId = this._config.groupId;
+    this._clientOptions = this._config.clientOptions;
+    this._consumerOptions = this._config.consumerOptions;
+    this._admin = KafkaManager.createAdmin(null, this._clientOptions);
     this._consumer = KafkaManager.createConsumer(null, this._clientOptions, this._consumerOptions);
   }
 
@@ -55,8 +59,18 @@ class KafkaConsumer extends AbstractConsumer {
     return "kafka";
   }
 
+  async _createTopicIfAllowed() {
+    if (await KafkaManager.isTopicExisted(this._admin, this._topic)) {
+      return;
+    }
+    if (this._topicOptions.allowAutoTopicCreation) {
+      await KafkaManager.createTopic(this._admin, this._topic, this._topicOptions);
+    }
+  }
+
   async _connectToMessageBroker() {
     await this._consumer.connect();
+    await this._admin.connect();
     logger.logConnectionEvent("🔌 Kafka Consumer", "connected to Kafka broker");
   }
 
@@ -65,17 +79,25 @@ class KafkaConsumer extends AbstractConsumer {
       await this._consumer.disconnect();
       this._consumer = null;
     }
+    if (this._admin) {
+      await this._admin.disconnect();
+      this._admin = null;
+    }
     logger.logConnectionEvent("Kafka Consumer", "disconnected from Kafka broker");
   }
 
   async _startConsumingFromBroker(_options = {}) {
     await this._consumer.subscribe({
-      topic: this.topic,
+      topic: this._topic,
       fromBeginning: this._consumerOptions.fromBeginning,
     });
 
     await this._consumer.run({
+      eachBatchAutoResolve: this._config.eachBatchAutoResolve,
       partitionsConsumedConcurrently: this.maxConcurrency,
+      autoCommit: this._config.autoCommit,
+      autoCommitInterval: this._config.autoCommitInterval,
+      autoCommitThreshold: this._config.autoCommitThreshold,
       eachMessage: async ({ topic, partition, message }) => {
         try {
           const standardizeMessage = this.#extractBrokerMessage({
@@ -124,7 +146,7 @@ class KafkaConsumer extends AbstractConsumer {
       },
     });
 
-    logger.logInfo(`📨 Kafka consumer started for topic '${this.topic}' in group '${this._groupId}'`);
+    logger.logInfo(`📨 Kafka consumer started for topic '${this._topic}' in group '${this._groupId}'`);
   }
 
   /**
@@ -155,7 +177,7 @@ class KafkaConsumer extends AbstractConsumer {
 
   async _stopConsumingFromBroker() {
     await this._consumer?.stop();
-    logger.logInfo(`⏹️ Kafka consumer stopped for topic '${this.topic}'`);
+    logger.logInfo(`⏹️ Kafka consumer stopped for topic '${this._topic}'`);
   }
 
   getConfigStatus() {

@@ -12,23 +12,23 @@ consumers, and caching while handling the complexities of each broker implementa
 ## ✨ Features
 
 - **🔄 Multi-broker support**: Write once, run anywhere with support for:
-    - Kafka (implemented)
-    - RabbitMQ (planned)
-    - BullMQ (planned)
+  - Kafka (implemented)
+  - RabbitMQ (planned)
+  - BullMQ (planned)
 
 - **📦 Caching layer abstractions**:
-    - Redis (implemented)
-    - Memcached (planned)
-    - In-memory cache (planned)
+  - Redis (implemented)
+  - Memcached (planned)
+  - In-memory cache (planned)
 
 - **🛠️ Advanced features**:
-    - Message suppression (cooldown period)
-    - Distributed locking
-    - Graceful shutdown handling
-    - Backpressure monitoring
-    - Message tracking and metrics
-    - Concurrency management
-    - Standardized error handling
+  - Message suppression (cooldown period)
+  - Distributed locking
+  - Graceful shutdown handling
+  - Backpressure monitoring
+  - Message tracking and metrics
+  - Concurrency management
+  - Standardized error handling
 
 ## 🏗️ Architecture
 
@@ -206,32 +206,32 @@ To start using Maestro in your own project, follow these steps:
 Extend the appropriate base producer class for your broker:
 
 ```javascript
-const {KafkaProducer} = require("@jonaskahn/maestro");
+const { KafkaProducer } = require("@jonaskahn/maestro");
 
 class MyProducer extends KafkaProducer {
-    constructor() {
-        super({
-            topic: "my-topic",
-            brokerOptions: {
-                clientOptions: {
-                    brokers: ["kafka:9092"],
-                },
-            },
-            cacheOptions: {
-                keyPrefix: "my-app",
-            },
-        });
-    }
+  constructor() {
+    super({
+      topic: "my-topic",
+      brokerOptions: {
+        clientOptions: {
+          brokers: ["kafka:9092"],
+        },
+      },
+      cacheOptions: {
+        keyPrefix: "my-app",
+      },
+    });
+  }
 
-    // Optional: Override methods for custom behavior
-    getNextItems(criteria, limit, excludedIds) {
-        // Your logic to fetch items to be produced
-        return fetchItemsFromDatabase(criteria, limit);
-    }
+  // Optional: Override methods for custom behavior
+  getNextItems(criteria, limit, excludedIds) {
+    // Your logic to fetch items to be produced
+    return fetchItemsFromDatabase(criteria, limit);
+  }
 
-    getItemId(item) {
-        return item.uniqueId; // Identify your items
-    }
+  getItemId(item) {
+    return item.uniqueId; // Identify your items
+  }
 }
 ```
 
@@ -240,34 +240,34 @@ class MyProducer extends KafkaProducer {
 Extend the appropriate base consumer class for your broker:
 
 ```javascript
-const {KafkaConsumer} = require("@jonaskahn/maestro");
+const { KafkaConsumer } = require("@jonaskahn/maestro");
 
 class MyConsumer extends KafkaConsumer {
-    constructor() {
-        super({
-            topic: "my-topic",
-            maxConcurrency: 5,
-            brokerOptions: {
-                clientOptions: {
-                    brokers: ["kafka:9092"],
-                },
-                consumerOptions: {
-                    groupId: "my-service",
-                    fromBeginning: false,
-                },
-            },
-            cacheOptions: {
-                keyPrefix: "my-app",
-            },
-        });
-    }
+  constructor() {
+    super({
+      topic: "my-topic",
+      maxConcurrency: 5,
+      brokerOptions: {
+        clientOptions: {
+          brokers: ["kafka:9092"],
+        },
+        consumerOptions: {
+          groupId: "my-service",
+          fromBeginning: false,
+        },
+      },
+      cacheOptions: {
+        keyPrefix: "my-app",
+      },
+    });
+  }
 
-    // Implement your business logic
-    async process(message) {
-        console.log(`Processing message: ${JSON.stringify(message)}`);
-        // Your message handling logic here
-        return true;
-    }
+  // Implement your business logic
+  async process(message) {
+    console.log(`Processing message: ${JSON.stringify(message)}`);
+    // Your message handling logic here
+    return true;
+  }
 }
 ```
 
@@ -275,17 +275,17 @@ class MyConsumer extends KafkaConsumer {
 
 ```javascript
 async function main() {
-    // Producer example
-    const producer = new MyProducer();
-    await producer.connect();
-    await producer.produce({status: "pending"}, 10);
+  // Producer example
+  const producer = new MyProducer();
+  await producer.connect();
+  await producer.produce({ status: "pending" }, 10);
 
-    // Consumer example
-    const consumer = new MyConsumer();
-    await consumer.connect();
-    await consumer.consume();
+  // Consumer example
+  const consumer = new MyConsumer();
+  await consumer.connect();
+  await consumer.consume();
 
-    // The consumer will continue running until explicitly stopped
+  // The consumer will continue running until explicitly stopped
 }
 
 main().catch(console.error);
@@ -309,33 +309,33 @@ The `OrderProducer` extends `KafkaProducer` and adds:
 
 ```javascript
 class OrderProducer extends KafkaProducer {
-    // Configure Kafka and Redis connections
-    constructor(_config = {}) {
-        super({
-            topic: "ecommerce-orders",
-            brokerOptions: {clientOptions: {brokers: ["localhost:9092"]}},
-            cacheOptions: {keyPrefix: "ECOMMERCE"},
-        });
-    }
+  // Configure Kafka and Redis connections
+  constructor(_config = {}) {
+    super({
+      topic: "ecommerce-orders",
+      brokerOptions: { clientOptions: { brokers: ["localhost:9092"] } },
+      cacheOptions: { keyPrefix: "ECOMMERCE" },
+    });
+  }
 
-    // Fetch pending orders from MongoDB
-    async getNextItems(criteria, limit, excludedIds) {
-        const pendingOrders = await this.getPendingOrders(
-            {
-                state: ORDER_STATES.PENDING,
-                ...criteria,
-            },
-            limit,
-            excludedIds
-        );
+  // Fetch pending orders from MongoDB
+  async getNextItems(criteria, limit, excludedIds) {
+    const pendingOrders = await this.getPendingOrders(
+      {
+        state: ORDER_STATES.PENDING,
+        ...criteria,
+      },
+      limit,
+      excludedIds
+    );
 
-        return pendingOrders;
-    }
+    return pendingOrders;
+  }
 
-    // Update database when message is successfully sent
-    async _onItemProcessSuccess(orderId) {
-        await database.collections.orders.updateOne({_id: orderId}, {$set: {status: "sent", sentAt: new Date()}});
-    }
+  // Update database when message is successfully sent
+  async _onItemProcessSuccess(orderId) {
+    await database.collections.orders.updateOne({ _id: orderId }, { $set: { status: "sent", sentAt: new Date() } });
+  }
 }
 ```
 
@@ -350,26 +350,26 @@ The `OrderConsumer` extends `KafkaConsumer` and adds:
 
 ```javascript
 class OrderConsumer extends KafkaConsumer {
-    constructor(_config = {}) {
-        super({
-            topic: "ecommerce-orders",
-            maxConcurrency: 10,
-            brokerOptions: {clientOptions: {brokers: ["localhost:9092"]}},
-            cacheOptions: {keyPrefix: "ECOMMERCE"},
-        });
-    }
+  constructor(_config = {}) {
+    super({
+      topic: "ecommerce-orders",
+      maxConcurrency: 10,
+      brokerOptions: { clientOptions: { brokers: ["localhost:9092"] } },
+      cacheOptions: { keyPrefix: "ECOMMERCE" },
+    });
+  }
 
-    // Business logic for order processing
-    async process(orderData) {
-        await this.validateOrder(orderData);
-        await this.processOrderSteps(orderData);
-        return this.createProcessingResult(orderData);
-    }
+  // Business logic for order processing
+  async process(orderData) {
+    await this.validateOrder(orderData);
+    await this.processOrderSteps(orderData);
+    return this.createProcessingResult(orderData);
+  }
 
-    // Mark order as completed in the database
-    async _onItemProcessSuccess(itemId) {
-        await database.markOrderAsCompleted(itemId);
-    }
+  // Mark order as completed in the database
+  async _onItemProcessSuccess(itemId) {
+    await database.markOrderAsCompleted(itemId);
+  }
 }
 ```
 

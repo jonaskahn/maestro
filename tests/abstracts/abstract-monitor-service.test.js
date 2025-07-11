@@ -36,7 +36,7 @@ class TestMonitorService extends AbstractMonitorService {
       totalLag: this._mockTotalLag || 0,
       maxPartitionLag: this._mockMaxPartitionLag || 0,
       avgLag: this._mockAvgLag || 0,
-      lagThreshold: this.config.maxLag,
+      lagThreshold: this.config.lagThreshold,
     };
   }
 
