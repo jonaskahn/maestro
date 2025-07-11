@@ -278,13 +278,15 @@ class KafkaManager {
       clientOptions: mergedClientOptions,
     };
 
-    const processingTtl = userConfig.cacheOptions.processingTtl;
-    const freezingTtl = userConfig.cacheOptions.freezingTtl ?? userConfig.cacheOptions.processingTtl * 5;
-    if (freezingTtl <= processingTtl) {
+    const processingTtl =
+      userConfig.cacheOptions?.processingTtl || parseInt(process.env.MO_CACHE_PROCESSING_TTL) || 5000;
+    const suppressionTtl =
+      userConfig.cacheOptions?.suppressionTtl ?? (parseInt(process.env.MO_CACHE_PROCESSING_TTL) || processingTtl) * 5;
+    if (suppressionTtl <= processingTtl) {
       throw new Error(`Processing time must be less then Freezing time`);
     }
     cacheOptions.processingTtl = processingTtl;
-    cacheOptions.freezingTtl = freezingTtl;
+    cacheOptions.suppressionTtl = suppressionTtl;
 
     standardizeConfig.cacheOptions = {
       ...userConfig.cacheOptions,
