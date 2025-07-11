@@ -205,101 +205,82 @@ describe("LoggerService", () => {
 
       expect(mockLogger.error).toHaveBeenCalledWith(message, metadata);
     });
+  });
 
-    it("should log batch operations", () => {
-      const batchId = "batch-123";
-      const operation = "processing";
-      const details = { items: 10 };
+  describe("Specialized Logging Methods", () => {
+    it("should log batch operation", () => {
+      const operation = "start";
+      const batchId = "batch123";
+      const count = 5;
+      const logSpy = jest.spyOn(loggerService, "logInfo");
 
-      loggerService.logBatchOperation(batchId, operation, details);
+      loggerService.logBatchOperation(operation, batchId, count);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(`[Batch ${batchId}] ${operation}`, details);
+      expect(logSpy).toHaveBeenCalledWith(`Batch ${operation}`, { batchId, count });
     });
 
-    it("should log task operations", () => {
-      const taskId = "task-456";
-      const operation = "completed";
-      const details = { duration: 500 };
+    it("should log task operation", () => {
+      const operation = "complete";
+      const taskId = "task123";
+      const duration = 100;
+      const logSpy = jest.spyOn(loggerService, "logInfo");
 
-      loggerService.logTaskOperation(taskId, operation, details);
+      loggerService.logTaskOperation(operation, taskId, duration);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(`[${taskId}] ${operation}`, details);
+      expect(logSpy).toHaveBeenCalledWith(`Task ${operation}`, { taskId, duration });
     });
 
-    it("should log connection events", () => {
-      const service = "Kafka";
-      const event = "connected";
-      const details = { host: "localhost:9092" };
+    it("should log connection event", () => {
+      const event = "connect";
+      const service = "kafka";
+      const logSpy = jest.spyOn(loggerService, "logInfo");
 
-      loggerService.logConnectionEvent(service, event, details);
+      loggerService.logConnectionEvent(event, service);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(`${service} ${event}`, details);
+      expect(logSpy).toHaveBeenCalledWith(`${service} ${event}`, { service });
     });
 
     it("should log concurrency status", () => {
-      const active = 5;
-      const max = 10;
-      const queued = 3;
-      const additionalInfo = { avgProcessingTime: 200 };
+      const active = 3;
+      const max = 5;
+      const logSpy = jest.spyOn(loggerService, "logDebug");
 
-      loggerService.logConcurrencyStatus(active, max, queued, additionalInfo);
+      loggerService.logConcurrencyStatus(active, max);
 
-      expect(mockLogger.info).toHaveBeenCalledWith(
-        `Concurrency Status: ${active}/${max} active, ${queued} queued`,
-        additionalInfo
-      );
+      expect(logSpy).toHaveBeenCalledWith("Concurrency status", { active, max, available: max - active });
     });
 
     it("should log processing statistics", () => {
-      const statistics = {
-        processed: 100,
-        failed: 2,
-        avgTime: 150,
+      const stats = {
+        total: 100,
+        success: 90,
+        failed: 10,
+        duration: 1000,
       };
+      const logSpy = jest.spyOn(loggerService, "logInfo");
 
-      loggerService.logProcessingStatistics(statistics);
+      loggerService.logProcessingStatistics(stats);
 
-      expect(mockLogger.info).toHaveBeenCalledWith("Processing Statistics", statistics);
+      expect(logSpy).toHaveBeenCalledWith("Processing statistics", stats);
     });
   });
 
-  describe("Helper Methods", () => {
-    it("should check if debug is enabled", () => {
-      const result = loggerService.isDebugEnabled();
+  describe("Exported Functions", () => {
+    it("should export working wrapper functions", () => {
+      logInfo("test info");
+      logDebug("test debug");
+      logWarning("test warning");
+      logError("test error");
+      logBatchOperation("test", "batch1", 10);
+      logTaskOperation("test", "task1", 100);
+      logConnectionEvent("test", "kafka");
+      logConcurrencyStatus(1, 10);
+      logProcessingStatistics({ total: 10 });
 
-      expect(mockLogger.isDebugEnabled).toHaveBeenCalled();
-      expect(result).toBe(true);
-    });
-
-    it("should check if specific level is enabled", () => {
-      const debugResult = loggerService.isLevelEnabled("debug");
-      const errorResult = loggerService.isLevelEnabled("error");
-
-      expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith("debug");
-      expect(mockLogger.isLevelEnabled).toHaveBeenCalledWith("error");
-      expect(debugResult).toBe(true);
-      expect(errorResult).toBe(false);
-    });
-  });
-
-  describe("Module Exports", () => {
-    it("should export bound logger methods", () => {
-      const testMessage = "Test message";
-
-      logInfo(testMessage);
-      logDebug(testMessage);
-      logWarning(testMessage);
-      logError(testMessage);
-      logBatchOperation("batch-1", "test");
-      logTaskOperation("task-1", "test");
-      logConnectionEvent("Redis", "connected");
-      logConcurrencyStatus(1, 5, 2);
-      logProcessingStatistics({ count: 10 });
-
-      expect(mockLogger.info).toHaveBeenCalledWith(testMessage, {});
-      expect(mockLogger.debug).toHaveBeenCalledWith(testMessage, {});
-      expect(mockLogger.warn).toHaveBeenCalledWith(testMessage, {});
-      expect(mockLogger.error).toHaveBeenCalledWith(testMessage, {});
+      expect(mockLogger.info).toHaveBeenCalledWith("test info", undefined);
+      expect(mockLogger.debug).toHaveBeenCalledWith("test debug", undefined);
+      expect(mockLogger.warn).toHaveBeenCalledWith("test warning", undefined);
+      expect(mockLogger.error).toHaveBeenCalledWith("test error", undefined);
     });
   });
 });

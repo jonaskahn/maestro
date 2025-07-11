@@ -12,7 +12,14 @@ class ProducerCronjob {
   constructor() {
     this.isJobRunning = false;
     this.task = null;
-    this.producer = new OrderProducer();
+    this.producer = new OrderProducer({
+      topic: "ecommerce-orders",
+      topicOptions: {
+        processingTtl: 240_000,
+        lagThreshold: 100,
+        lagMonitorInterval: 5000,
+      },
+    });
   }
 
   async start() {

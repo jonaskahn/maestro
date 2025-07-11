@@ -10,7 +10,13 @@ const Logger = require("./src/utils/logger");
 
 class ConsumerDaemon {
   constructor() {
-    this.consumer = new OrderConsumer();
+    this.consumer = new OrderConsumer({
+      topic: "ecommerce-orders",
+      topicOptions: {
+        processingTtl: 240_000,
+        maxConcurrency: 10,
+      },
+    });
   }
 
   async start() {

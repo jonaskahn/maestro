@@ -16,14 +16,7 @@ const SIMULATION_DELAYS = {
 
 class OrderConsumer extends DefaultConsumer {
   constructor(config = {}) {
-    super({
-      topic: config.topic || "ecommerce-orders",
-      maxConcurrency: config.maxConcurrency || 10,
-      cacheOptions: {
-        keyPrefix: config.keyPrefix || "ECOMMERCE",
-        processingTtl: config.processingTtl || 240_000,
-      },
-    });
+    super(config);
 
     this.stats = {
       processedCount: 0,

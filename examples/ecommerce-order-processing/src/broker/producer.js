@@ -26,16 +26,8 @@ const DEFAULT_RETRY_SETTINGS = {
 };
 
 class OrderProducer extends DefaultProducer {
-  constructor(config = {}) {
-    super({
-      topic: config.topic || "ecommerce-orders",
-      lagThreshold: config.lagThreshold || 50,
-      cacheOptions: {
-        keyPrefix: config.keyPrefix || "ECOMMERCE",
-        processingTtl: config.processingTtl || 240_000,
-      },
-    });
-
+  constructor(config) {
+    super(config);
     this.processedCount = 0;
     this.failedCount = 0;
     this.dbInitialized = false;

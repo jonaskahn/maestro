@@ -278,16 +278,29 @@ class KafkaManager {
       clientOptions: mergedClientOptions,
     };
 
+    const keyPrefix =
+      userConfig.topicOptions?.keyPrefix || userConfig.cacheOptions?.keyPrefix || `${userConfig.topic.toUpperCase()}`;
     const processingTtl =
-      userConfig.cacheOptions?.processingTtl || parseInt(process.env.MO_CACHE_PROCESSING_TTL) || 5000;
+      userConfig.topicOptions?.processingTtl ||
+      userConfig.cacheOptions?.processingTtl ||
+      parseInt(process.env.MO_CACHE_PROCESSING_TTL) ||
+      5000;
     const suppressionTtl =
-      userConfig.cacheOptions?.suppressionTtl ?? (parseInt(process.env.MO_CACHE_PROCESSING_TTL) || processingTtl) * 5;
+      userConfig.topicOptions?.suppressionTtl ||
+      userConfig.cacheOptions?.suppressionTtl ||
+      (parseInt(process.env.MO_CACHE_PROCESSING_TTL) || processingTtl) * 5;
     if (suppressionTtl <= processingTtl) {
       throw new Error(`Processing time must be less then Freezing time`);
     }
+
+    standardizeConfig.topicOptions.keyPrefix = keyPrefix;
+    standardizeConfig.topicOptions.processingTtl = processingTtl;
+    standardizeConfig.topicOptions.suppressionTtl = suppressionTtl;
+
+    // KEEP OBSOLETE CACHE CONFIGURATION FOR COMPATIBLE
+    cacheOptions.keyPrefix = keyPrefix;
     cacheOptions.processingTtl = processingTtl;
     cacheOptions.suppressionTtl = suppressionTtl;
-
     standardizeConfig.cacheOptions = {
       ...userConfig.cacheOptions,
       ...cacheOptions,
@@ -295,7 +308,10 @@ class KafkaManager {
 
     if (type === "consumer") {
       standardizeConfig.maxConcurrency =
-        parseInt(userConfig?.maxConcurrency) || parseInt(process.env.MO_MAX_CONCURRENT_MESSAGES) || 1;
+        parseInt(userConfig.maxConcurrency) ||
+        parseInt(userConfig.topicOptions?.maxConcurrency) ||
+        parseInt(process.env.MO_MAX_CONCURRENT_MESSAGES) ||
+        1;
       standardizeConfig.eachBatchAutoResolve = process.env.MO_KAFKA_CONSUMER_EACH_BATCH_AUTO_RESOLVE !== "false";
       standardizeConfig.autoCommit = process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT !== "false";
       standardizeConfig.autoCommitInterval = parseInt(process.env.MO_KAFKA_CONSUMER_AUTO_COMMIT_INTERVAL) || 5000;
@@ -313,9 +329,15 @@ class KafkaManager {
         ...producerOptions,
       };
       standardizeConfig.lagThreshold =
-        userConfig.lagThreshold || parseInt(process.env.MO_KAFKA_PRODUCER_LAG_THRESHOLD) || 1000;
+        userConfig.lagThreshold ||
+        userConfig.topicOptions?.lagThreshold ||
+        parseInt(process.env.MO_KAFKA_PRODUCER_LAG_THRESHOLD) ||
+        100;
       standardizeConfig.lagMonitorInterval =
-        userConfig.lagMonitorInterval || parseInt(process.env.MO_KAFKA_PRODUCER_LAG_INTERVAL) || 5000;
+        userConfig.lagMonitorInterval ||
+        userConfig.topicOptions?.lagMonitorInterval ||
+        parseInt(process.env.MO_KAFKA_PRODUCER_LAG_INTERVAL) ||
+        5000;
       standardizeConfig.useSuppression = userConfig.useSuppression !== "false";
       standardizeConfig.useDistributedLock = userConfig.useDistributedLock !== "false";
     }
