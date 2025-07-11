@@ -94,7 +94,7 @@ class TestConsumer extends AbstractConsumer {
 describe("AbstractConsumer", () => {
   let consumerInstance;
   const validConfig = {
-    topic: "test-_topic",
+    topic: "test-topic",
     maxConcurrency: 3,
     statusReportInterval: 500,
     cacheOptions: {
@@ -123,15 +123,15 @@ describe("AbstractConsumer", () => {
     it("should throw error when instantiating with invalid config", () => {
       expect(() => new TestConsumer()).toThrow("Consumer configuration must be an object");
       expect(() => new TestConsumer("invalid")).toThrow("Consumer configuration must be an object");
-      expect(() => new TestConsumer({})).toThrow("Consumer configuration must include a _topic string");
-      expect(() => new TestConsumer({ topic: 123 })).toThrow("Consumer configuration must include a _topic string");
+      expect(() => new TestConsumer({})).toThrow("Consumer configuration must include a topic string");
+      expect(() => new TestConsumer({ topic: 123 })).toThrow("Consumer configuration must include a topic string");
     });
 
     it("should throw error when cache options are invalid", () => {
       expect(
         () =>
           new TestConsumer({
-            topic: "test-_topic",
+            topic: "test-topic",
             cacheOptions: "invalid",
           })
       ).toThrow("Cache options must be an object");
@@ -139,23 +139,23 @@ describe("AbstractConsumer", () => {
       expect(
         () =>
           new TestConsumer({
-            topic: "test-_topic",
+            topic: "test-topic",
             cacheOptions: {},
           })
       ).toThrow("Cache options must include keyPrefix");
     });
 
-    it("should create #consumer instance with valid configuration", () => {
+    it("should create consumer instance with valid configuration", () => {
       consumerInstance = new TestConsumer(validConfig);
       expect(consumerInstance).toBeInstanceOf(TestConsumer);
-      expect(consumerInstance._topic).toBe("test-_topic");
+      expect(consumerInstance.topic).toBe("test-topic");
       expect(consumerInstance.maxConcurrency).toBe(3);
       expect(consumerInstance.getBrokerType()).toBe("test-broker");
     });
 
     it("should use default values when config values are missing", () => {
       const minimalConfig = {
-        topic: "minimal-_topic",
+        topic: "minimal-topic",
         cacheOptions: { keyPrefix: "test:" },
       };
       consumerInstance = new TestConsumer(minimalConfig);
@@ -169,12 +169,12 @@ describe("AbstractConsumer", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        MO_MAX_CONCURRENT_MESSAGES: "5",
-        MO_STATUS_REPORT_INTERVAL: "1000",
+        JO_MAX_CONCURRENT_MESSAGES: "5",
+        JO_STATUS_REPORT_INTERVAL: "1000",
       };
 
       consumerInstance = new TestConsumer({
-        topic: "env-_topic",
+        topic: "env-topic",
         cacheOptions: { keyPrefix: "test:" },
       });
       expect(consumerInstance.maxConcurrency).toBe(5);
@@ -197,7 +197,7 @@ describe("AbstractConsumer", () => {
     it("should handle when already connected", async () => {
       await consumerInstance.connect();
       await consumerInstance.connect();
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker #consumer is already connected");
+      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer is already connected");
     });
 
     it("should handle connection failure", async () => {
@@ -213,12 +213,12 @@ describe("AbstractConsumer", () => {
       await consumerInstance.disconnect();
 
       expect(consumerInstance.brokerConnected).toBe(false);
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker #consumer disconnected successfully");
+      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer disconnected successfully");
     });
 
     it("should handle disconnection when not connected", async () => {
       await consumerInstance.disconnect();
-      expect(logger.logWarning).toHaveBeenCalledWith("test-broker #consumer is already disconnected");
+      expect(logger.logWarning).toHaveBeenCalledWith("test-broker consumer is already disconnected");
     });
 
     it("should handle disconnection failure", async () => {
@@ -240,18 +240,18 @@ describe("AbstractConsumer", () => {
     it("should start consuming messages", async () => {
       await consumerInstance.consume({ handler: jest.fn() });
       expect(consumerInstance.brokerConsuming).toBe(true);
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker #consumer started consuming from test-_topic");
+      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer started consuming from test-topic");
     });
 
     it("should handle when already consuming", async () => {
       await consumerInstance.consume();
       await consumerInstance.consume();
-      expect(logger.logWarning).toHaveBeenCalledWith("test-broker #consumer is already consuming messages");
+      expect(logger.logWarning).toHaveBeenCalledWith("test-broker consumer is already consuming messages");
     });
 
     it("should throw error when trying to consume while disconnected", async () => {
       await consumerInstance.disconnect();
-      await expect(consumerInstance.consume()).rejects.toThrow("test-broker #consumer is not connected");
+      await expect(consumerInstance.consume()).rejects.toThrow("test-broker consumer is not connected");
     });
 
     it("should handle consumption start failure", async () => {
@@ -267,12 +267,12 @@ describe("AbstractConsumer", () => {
       await consumerInstance.stopConsuming();
 
       expect(consumerInstance.brokerConsuming).toBe(false);
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker #consumer stopped consuming from test-_topic");
+      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer stopped consuming from test-topic");
     });
 
     it("should handle when not consuming", async () => {
       await consumerInstance.stopConsuming();
-      expect(logger.logWarning).toHaveBeenCalledWith("test-broker #consumer is not currently consuming");
+      expect(logger.logWarning).toHaveBeenCalledWith("test-broker consumer is not currently consuming");
     });
 
     it("should handle stop consumption failure", async () => {
@@ -363,7 +363,7 @@ describe("AbstractConsumer", () => {
 
       // First status report
       expect(logger.logInfo).toHaveBeenCalledWith(
-        expect.stringContaining("test-broker #consumer status: processed=0, failed=0")
+        expect.stringContaining("test-broker consumer status: processed=0, failed=0")
       );
 
       // Process a message to update metrics
@@ -373,7 +373,7 @@ describe("AbstractConsumer", () => {
       jest.advanceTimersByTime(500);
 
       // Second status report with updated metrics
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-broker #consumer status:"));
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-broker consumer status:"));
     });
 
     it("should provide config status with correct metrics", async () => {
@@ -381,7 +381,7 @@ describe("AbstractConsumer", () => {
 
       // Initial status
       let status = consumerInstance.getConfigStatus();
-      expect(status.topic).toBe("test-_topic");
+      expect(status.topic).toBe("test-topic");
       expect(status.maxConcurrency).toBe(3);
       expect(status.isConsuming).toBe(true);
       expect(status.processedCount).toBe(0);
@@ -412,8 +412,8 @@ describe("AbstractConsumer", () => {
       const instance = Object.create(AbstractConsumerPrototype);
 
       // Initialize just enough to prevent null reference errors
-      instance.topic = "test-_topic";
-      instance.config = { topic: "test-_topic" };
+      instance.topic = "test-topic";
+      instance.config = { topic: "test-topic" };
 
       return instance;
     };

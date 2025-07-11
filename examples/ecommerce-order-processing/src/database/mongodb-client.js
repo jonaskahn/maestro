@@ -10,12 +10,12 @@ const Logger = require("../utils/logger");
 
 // Database configuration
 const DB_CONFIG = {
-  url: "mongodb://localhost:27017/myapp?authSource=admin",
+  url: "mongodb://root:strongpassword@localhost:27017/myapp?authSource=admin",
   dbName: "myapp",
   collections: {
     orders: "orders",
   },
-  orderGenerationRate: 1000,
+  orderGenerationRate: 10,
 };
 
 // State constants for Job Orchestrator compatibility
@@ -506,8 +506,8 @@ class MongoDatabase {
 
     if (count === 0) {
       Logger.info("Initializing database with test data");
-      await this.generateNewOrders(1000);
-      Logger.success("Created 1000 test orders");
+      await this.generateNewOrders(50);
+      Logger.success("Created 50 test orders");
     } else {
       Logger.info(`Database already contains ${count} orders`);
     }

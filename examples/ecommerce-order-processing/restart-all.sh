@@ -3,9 +3,11 @@
 echo "🛑 Stopping all containers..."
 docker-compose down
 
-echo "🧹 Removing any orphaned containers/networks/volumes..."
+echo "🧹 Removing any orphaned containers and networks..."
 docker-compose down --remove-orphans
-docker-compose down -v
+
+echo "🔥 Optionally remove volumes (uncomment if you want fresh data)..."
+# docker-compose down -v  # Uncomment this line to remove all data volumes
 
 echo "🚀 Starting all containers with new configuration..."
 docker-compose up -d

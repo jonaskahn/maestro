@@ -27,12 +27,26 @@ const DEFAULT_RETRY_SETTINGS = {
 
 class OrderProducer extends DefaultProducer {
   constructor(config = {}) {
+    const topic = config.topic || "ecommerce-orders";
+    const maxLag = config.maxLag || 50;
+    const keyPrefix = config.keyPrefix || "ECOMMERCE";
+    const processingTtl = config.processingTtl || 5000;
+    const redisPassword = config.redisPassword || "myredispassword";
+
     super({
-      topic: config.topic || "ecommerce-orders",
-      maxLag: config.maxLag || 5,
+      topic,
+      maxLag,
+      brokerOptions: {
+        clientOptions: {
+          brokers: ["localhost:9092"],
+        },
+      },
       cacheOptions: {
-        keyPrefix: config.keyPrefix || "ECOMMERCE",
-        processingTtl: config.processingTtl || 5000,
+        keyPrefix,
+        processingTtl,
+        connectionOptions: {
+          password: redisPassword,
+        },
       },
     });
 

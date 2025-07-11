@@ -1,3 +1,5 @@
+version: "3.8"
+
 services:
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
@@ -8,6 +10,9 @@ services:
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
+    volumes:
+      - zookeeper_data:/var/lib/zookeeper/data
+      - zookeeper_logs:/var/lib/zookeeper/log
     networks:
       - app-network
 
@@ -34,6 +39,8 @@ services:
       KAFKA_LOG_COMPRESSION_TYPE: gzip
       KAFKA_MESSAGE_MAX_BYTES: 1048576
       KAFKA_LOG_SEGMENT_BYTES: 1073741824
+    volumes:
+      - kafka_data:/var/lib/kafka/data
     networks:
       - app-network
     healthcheck:
@@ -64,6 +71,8 @@ services:
     ports:
       - "6379:6379"
     command: redis-server --appendonly yes --requirepass myredispassword
+    volumes:
+      - redis_data:/data
     networks:
       - app-network
     healthcheck:
@@ -88,13 +97,17 @@ services:
       retries: 5
 
   mongo:
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: mongodb
     restart: always
     ports:
       - "27017:27017"
     environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: strongpassword
       MONGO_INITDB_DATABASE: myapp
+    volumes:
+      - mongo-data:/data/db
     networks:
       - app-network
     healthcheck:
@@ -120,3 +133,10 @@ services:
 networks:
   app-network:
     driver: bridge
+
+volumes:
+  zookeeper_data:
+  zookeeper_logs:
+  kafka_data:
+  redis_data:
+  mongo-data:

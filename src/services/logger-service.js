@@ -5,12 +5,9 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Centralized Logging Service
+ * Centralized Logging Service using Winston
  *
- * Provides structured logging capabilities with configurable formats and levels.
- * Built on Winston to offer consistent logging across the application with specialized
- * methods for different event types, error handling, and performance monitoring.
- * Supports multiple output transports and environment-based configuration.
+ * Provides structured logging with multiple formats, levels, and specialized methods for application events.
  */
 const winston = require("winston");
 
@@ -34,8 +31,8 @@ class LoggerService {
 
   /**
    * Logs informational messages
-   * @param {string} message Message to log
-   * @param {Object} metadata Additional context data
+   * @param {string} message - Message to log
+   * @param {Object} metadata - Additional context data
    */
   logInfo(message, metadata = {}) {
     this.logger.info(message, metadata);
@@ -43,8 +40,8 @@ class LoggerService {
 
   /**
    * Logs debug messages for development and troubleshooting
-   * @param {string} message Message to log
-   * @param {Object} metadata Additional context data
+   * @param {string} message - Message to log
+   * @param {Object} metadata - Additional context data
    */
   logDebug(message, metadata = {}) {
     this.logger.debug(message, metadata);
@@ -52,8 +49,8 @@ class LoggerService {
 
   /**
    * Logs warning messages for potentially problematic situations
-   * @param {string} message Message to log
-   * @param {Object} metadata Additional context data
+   * @param {string} message - Message to log
+   * @param {Object} metadata - Additional context data
    */
   logWarning(message, metadata = {}) {
     this.logger.warn(message, metadata);
@@ -61,9 +58,9 @@ class LoggerService {
 
   /**
    * Logs error messages with optional error object and stack trace
-   * @param {string} message Error description
-   * @param {Error} error Error object with stack trace
-   * @param {Object} metadata Additional context data
+   * @param {string} message - Error description
+   * @param {Error} error - Error object with stack trace
+   * @param {Object} metadata - Additional context data
    */
   logError(message, error = null, metadata = {}) {
     const errorInfo = error
@@ -78,9 +75,9 @@ class LoggerService {
 
   /**
    * Logs batch operation events with structured identifiers
-   * @param {string} batchId Unique batch identifier
-   * @param {string} operation Operation description
-   * @param {Object} details Operation-specific details
+   * @param {string} batchId - Unique batch identifier
+   * @param {string} operation - Operation description
+   * @param {Object} details - Operation-specific details
    */
   logBatchOperation(batchId, operation, details = {}) {
     this.logInfo(`[Batch ${batchId}] ${operation}`, details);
@@ -88,9 +85,9 @@ class LoggerService {
 
   /**
    * Logs task operation events with structured identifiers
-   * @param {string} taskId Unique task identifier
-   * @param {string} operation Operation description
-   * @param {Object} details Task-specific details
+   * @param {string} taskId - Unique task identifier
+   * @param {string} operation - Operation description
+   * @param {Object} details - Task-specific details
    */
   logTaskOperation(taskId, operation, details = {}) {
     this.logInfo(`[${taskId}] ${operation}`, details);
@@ -98,9 +95,9 @@ class LoggerService {
 
   /**
    * Logs connection and disconnection events for services
-   * @param {string} service Service name (e.g., "Kafka", "Redis")
-   * @param {string} event Connection event description
-   * @param {Object} details Connection-specific details
+   * @param {string} service - Service name (e.g., "Kafka", "Redis")
+   * @param {string} event - Connection event description
+   * @param {Object} details - Connection-specific details
    */
   logConnectionEvent(service, event, details = {}) {
     this.logInfo(`${service} ${event}`, details);
@@ -108,10 +105,10 @@ class LoggerService {
 
   /**
    * Logs concurrency status for worker pools and processing queues
-   * @param {number} active Number of active workers
-   * @param {number} max Maximum number of workers
-   * @param {number} queued Number of queued tasks
-   * @param {Object} additionalInfo Additional concurrency metrics
+   * @param {number} active - Number of active workers
+   * @param {number} max - Maximum number of workers
+   * @param {number} queued - Number of queued tasks
+   * @param {Object} additionalInfo - Additional concurrency metrics
    */
   logConcurrencyStatus(active, max, queued, additionalInfo = {}) {
     this.logInfo(`Concurrency Status: ${active}/${max} active, ${queued} queued`, additionalInfo);
@@ -119,7 +116,7 @@ class LoggerService {
 
   /**
    * Logs processing statistics and performance metrics
-   * @param {Object} statistics Processing statistics object
+   * @param {Object} statistics - Processing statistics object
    */
   logProcessingStatistics(statistics) {
     this.logInfo("Processing Statistics", statistics);
@@ -135,7 +132,7 @@ class LoggerService {
 
   /**
    * Checks if specific log level is enabled
-   * @param {string} level Log level to check ('error', 'warn', 'info', 'debug')
+   * @param {string} level - Log level to check ('error', 'warn', 'info', 'debug')
    * @returns {boolean} True if specified level is enabled
    */
   isLevelEnabled(level) {

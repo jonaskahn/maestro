@@ -7,40 +7,32 @@
  *
  * Kafka Monitor Service
  *
- * Concrete implementation of AbstractMonitorService for Kafka.
- * Monitors Kafka topics and consumer groups to collect performance metrics
- * and detect backpressure conditions. Used to implement automatic flow control
- * based on consumer lag and system resource utilization.
+ * Monitors Kafka topics and consumer groups for performance metrics and backpressure.
+ * Used to implement automatic flow control based on consumer lag and other indicators.
  */
 const AbstractMonitorService = require("../../../abstracts/abstract-monitor-service");
-const KafkaManager = require("./kafka-manager");
 const logger = require("../../../services/logger-service");
 
-class KafkaMonitorService extends AbstractMonitorService {
-  _topic;
-  _groupId;
-  _clientOptions;
-  _admin;
+// Using the new KafkaManager that combines utilities and client factory
+const KafkaManager = require("./kafka-manager");
 
-  /**
-   * Create a new Kafka monitor service
-   * @param {Object} config Monitor service configuration
-   */
+class KafkaMonitorService extends AbstractMonitorService {
+  #topic;
+  #groupId;
+  #clientOptions;
+  #admin;
+
   constructor(config) {
     super(config);
-    this._topic = config.topic;
-    this._groupId = config.groupId;
-    this._clientOptions = config.clientOptions;
+    this.#topic = config.topic;
+    this.#groupId = config.groupId;
+    this.#clientOptions = config.clientOptions;
   }
 
-  /**
-   * Connect to Kafka and start monitoring
-   * @returns {Promise<void>}
-   */
   async connect() {
     await super.connect();
-    this._admin = await KafkaManager.createAdmin(null, this._clientOptions);
-    await this._admin.connect();
+    this.#admin = await KafkaManager.createAdmin(null, this.#clientOptions);
+    await this.#admin.connect();
   }
 
   /**
@@ -52,12 +44,12 @@ class KafkaMonitorService extends AbstractMonitorService {
   }
 
   /**
-   * Get consumer lag metrics from Kafka
+   * Get consumer lag metrics (required by abstract class)
    * @returns {Promise<Object>} Lag metrics
    */
   async getConsumerLag() {
     try {
-      logger.logDebug(`✨ Start monitoring current consumer for topic ${this._topic} lag`);
+      logger.logDebug(`✨ Start monitoring current consumer for topic ${this.#topic} lag`);
       const totalLag = await this._fetchCurrentLag();
 
       return {
@@ -67,15 +59,15 @@ class KafkaMonitorService extends AbstractMonitorService {
         lagThreshold: this.config.maxLag,
       };
     } catch (error) {
-      logger.logError(`‼️ Failed monitoring current consumer for topic ${this._topic} lag:`, error);
+      logger.logError(`‼️ Failed monitoring current consumer for topic ${this.#topic} lag:`, error);
       throw error;
     } finally {
-      logger.logDebug(`☑️ Finish monitoring current consumer for topic ${this._topic} lag`);
+      logger.logDebug(`☑️ Finish monitoring current consumer for topic ${this.#topic} lag`);
     }
   }
 
   /**
-   * Get system resource metrics
+   * Get system resource metrics (required by abstract class)
    * @returns {Promise<Object>} Resource metrics
    */
   async getResourceMetrics() {
@@ -86,33 +78,20 @@ class KafkaMonitorService extends AbstractMonitorService {
     };
   }
 
-  /**
-   * Fetch current consumer lag from Kafka
-   * @returns {Promise<number>} Consumer lag value
-   */
   async _fetchCurrentLag() {
-    if (!this._groupId || !this._topic) {
-      logger.logWarning("Consumer group or _topic not configured, returning 0 lag");
+    if (!this.#groupId || !this.#topic) {
+      logger.logWarning("Consumer group or topic not configured, returning 0 lag");
       return 0;
     }
 
-    if (await KafkaManager.isTopicExisted(this._admin, this._topic)) {
-      return await KafkaManager.calculateConsumerLag(this._groupId, this._topic, this._admin);
-    } else {
-      logger.logWarning(`Monitor skipped due the topic [ ${this._topic} ] does not existed`);
-      return 0;
-    }
+    return await KafkaManager.calculateConsumerLag(this.#groupId, this.#topic, this.#admin);
   }
 
-  /**
-   * Disconnect from Kafka and stop monitoring
-   * @returns {Promise<void>}
-   */
   async disconnect() {
     try {
       await super.disconnect();
-      await this._admin.disconnect();
-      this._admin = null;
+      await this.#admin.disconnect();
+      this.#admin = null;
     } catch (error) {
       logger.logWarning(`⚠️ Errors happened when Kafka Monitor Service disconnect its services`, error);
     }

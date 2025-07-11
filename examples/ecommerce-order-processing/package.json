@@ -31,8 +31,7 @@
     "memcached": "^2.2.2",
     "mongodb": "^6.3.0",
     "node-cron": "^3.0.3",
-    "redis": "^4.6.11",
-    "dotenv": "^17.2.0"
+    "redis": "^4.6.11"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

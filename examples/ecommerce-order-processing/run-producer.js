@@ -98,7 +98,6 @@ class ProducerCronjob {
 
 async function main() {
   try {
-    require("dotenv").config();
     const cronjob = new ProducerCronjob();
     await cronjob.start();
   } catch (error) {

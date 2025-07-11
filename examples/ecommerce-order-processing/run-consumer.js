@@ -1,7 +1,7 @@
 /**
  * Order Consumer Runner
  *
- * Entry point for the order #consumer service.
+ * Entry point for the order consumer service.
  */
 
 const { OrderConsumer } = require("./src/broker");
@@ -24,7 +24,7 @@ class ConsumerDaemon {
 
       Logger.success("Consumer daemon started successfully");
     } catch (error) {
-      Logger.error("Failed to start #consumer daemon", error);
+      Logger.error("Failed to start consumer daemon", error);
       await this.cleanup();
       process.exit(1);
     }
@@ -64,7 +64,6 @@ class ConsumerDaemon {
 
 async function main() {
   try {
-    require("dotenv").config();
     const daemon = new ConsumerDaemon();
     await daemon.start();
   } catch (error) {

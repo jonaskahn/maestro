@@ -16,12 +16,22 @@ const SIMULATION_DELAYS = {
 
 class OrderConsumer extends DefaultConsumer {
   constructor(config = {}) {
+    const topic = config.topic || "ecommerce-orders";
+    const maxConcurrency = config.maxConcurrency || 10;
+    const keyPrefix = config.keyPrefix || "ECOMMERCE";
+    const processingTtl = config.processingTtl || 60000;
+
     super({
-      topic: config.topic || "ecommerce-orders",
-      maxConcurrency: config.maxConcurrency || 10,
+      topic,
+      maxConcurrency,
+      brokerOptions: {
+        clientOptions: {
+          brokers: ["localhost:9092"],
+        },
+      },
       cacheOptions: {
-        keyPrefix: config.keyPrefix || "ECOMMERCE",
-        processingTtl: config.processingTtl || 60000,
+        keyPrefix,
+        processingTtl,
       },
     });
 
