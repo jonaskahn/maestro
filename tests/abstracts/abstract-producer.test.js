@@ -177,7 +177,7 @@ describe("AbstractProducer", () => {
       expect(() => new AbstractProducer(validConfig)).toThrow("AbstractProducer cannot be instantiated directly");
     });
 
-    it("should throw error when instantiating with invalid config", () => {
+    it("should throw error when instantiating with invalid _config", () => {
       expect(() => new TestProducer()).toThrow("Producer configuration must be an object");
       expect(() => new TestProducer("invalid")).toThrow("Producer configuration must be an object");
       expect(() => new TestProducer({})).toThrow("Producer configuration missing required fields: topic");
@@ -186,7 +186,7 @@ describe("AbstractProducer", () => {
     it("should create producer instance with valid configuration", () => {
       producerInstance = new TestProducer(validConfig);
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance.config.topic).toBe("test-topic");
+      expect(producerInstance._config.topic).toBe("test-topic");
       expect(producerInstance.getBrokerType()).toBe("test-broker");
     });
 
@@ -200,8 +200,8 @@ describe("AbstractProducer", () => {
         topic: "minimal-topic",
       });
       expect(producerInstance).toBeInstanceOf(TestProducer);
-      expect(producerInstance.config.topic).toBe("minimal-topic");
-      expect(producerInstance.config.useSuppression).toBeUndefined();
+      expect(producerInstance._config.topic).toBe("minimal-topic");
+      expect(producerInstance._config.useSuppression).toBeUndefined();
     });
   });
 

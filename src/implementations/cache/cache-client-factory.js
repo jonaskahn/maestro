@@ -13,7 +13,7 @@ const logger = require("../../services/logger-service");
 
 class CacheClientFactory {
   /**
-   * Creates a cache client instance based on configuration
+   * Creates a cache _client instance based on configuration
    * @param {Object} config - Cache configuration object
    * @param {string} config.implementation - Cache implementation type ('redis', 'memcached', 'memory')
    * @param {string} config.keyPrefix - Key prefix for organization
@@ -40,7 +40,7 @@ class CacheClientFactory {
           });
       }
     } catch (error) {
-      logger.logError("Failed to create cache client", error);
+      logger.logError("Failed to create cache _client", error);
 
       if (config.implementation !== "redis") {
         logger.logWarning("Attempting fallback to Redis cache...");
@@ -62,17 +62,17 @@ class CacheClientFactory {
   }
 
   /**
-   * Resolve cache implementation from config and environment
+   * Resolve cache implementation from _config and environment
    * @param {Object} config - Configuration object
    * @returns {string} Implementation type
    * @private
    */
   static _resolveImplementation(config) {
-    return config.implementation || process.env.JO_CACHE_IMPLEMENTATION || "redis";
+    return config.implementation || process.env.MO_CACHE_IMPLEMENTATION || "redis";
   }
 
   /**
-   * Create Redis cache client
+   * Create Redis cache _client
    * @param {Object} config - Configuration object
    * @returns {RedisCacheClient} Redis cache layer instance
    * @private
@@ -86,19 +86,19 @@ class CacheClientFactory {
         implementation: "redis",
       });
     } catch (error) {
-      logger.logError("Failed to create Redis cache client", error);
+      logger.logError("Failed to create Redis cache _client", error);
       throw new Error(`Redis cache client creation failed: ${error.message}`);
     }
   }
 
   /**
-   * Create Memcached client
+   * Create Memcached _client
    * @param {Object} config - Configuration object
    * @returns {MemcachedCacheClient} Memcached cache layer instance
    * @private
    */
   static _createMemcachedClient(config) {
-    const MemcachedCacheClient = require("./memcached-cache-client");
+    const MemcachedCacheClient = require("./memcached-cache-_client");
 
     try {
       return new MemcachedCacheClient({
@@ -106,19 +106,19 @@ class CacheClientFactory {
         implementation: "memcached",
       });
     } catch (error) {
-      logger.logError("Failed to create Memcached cache client", error);
+      logger.logError("Failed to create Memcached cache _client", error);
       throw new Error(`Memcached cache client creation failed: ${error.message}`);
     }
   }
 
   /**
-   * Create Memory cache client
+   * Create Memory cache _client
    * @param {Object} config - Configuration object
    * @returns {MemoryCacheClient} Memory cache layer instance
    * @private
    */
   static _createMemoryClient(config) {
-    const MemoryCacheClient = require("./memory-cache-client");
+    const MemoryCacheClient = require("./memory-cache-_client");
 
     try {
       logger.logWarning(
@@ -130,7 +130,7 @@ class CacheClientFactory {
         implementation: "memory",
       });
     } catch (error) {
-      logger.logError("Failed to create Memory cache client", error);
+      logger.logError("Failed to create Memory cache _client", error);
       throw new Error(`Memory cache client creation failed: ${error.message}`);
     }
   }
@@ -222,7 +222,7 @@ class CacheClientFactory {
    */
   static getDefaultConfig(implementation = "redis") {
     const baseConfig = {
-      keyPrefix: "JO_DEFAULT",
+      keyPrefix: "MO_DEFAULT",
       processingTtl: 10 * 1000,
       sentTtl: 20 * 1000,
       retryOptions: {

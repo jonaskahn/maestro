@@ -18,17 +18,19 @@ const DistributedLockService = require("../services/distributed-lock-service");
 const REQUIRED_CONFIG_FIELDS = ["topic"];
 
 class AbstractProducer {
-  #topic;
+  _topic;
+  _config;
 
-  #cacheLayer;
-  #distributedLockService;
-  #monitorService;
+  _cacheLayer;
+  _distributedLockService;
+  _monitorService;
 
-  #isConnected;
-  #isShuttingDown;
+  _isConnected;
+  _isShuttingDown;
+  _topicExisted;
 
-  #enabledSuppression;
-  #enabledDistributedLock;
+  _enabledSuppression;
+  _enabledDistributedLock;
 
   constructor(config) {
     this.#ensureNotDirectInstantiation();
@@ -71,10 +73,11 @@ class AbstractProducer {
   }
 
   #initializeConfiguration(config) {
-    this.#topic = config.topic;
-    this.#enabledSuppression = config.useSuppression;
-    this.#enabledDistributedLock = config.useDistributedLock;
-    this.config = config;
+    this._topic = config.topic;
+    this._topicExisted = true;
+    this._enabledSuppression = config.useSuppression;
+    this._enabledDistributedLock = config.useDistributedLock;
+    this._config = config;
   }
 
   _createCacheLayer(_config) {
@@ -87,14 +90,14 @@ class AbstractProducer {
   }
 
   _createDistributedLockService(config) {
-    if (!this.#cacheLayer || !this.#enabledDistributedLock) {
+    if (!this._cacheLayer || !this._enabledDistributedLock) {
       logger.logWarning("Producer distributed lock is disabled");
       return null;
     }
 
     const lockKey = this.#generateLockKey(config?.topic);
     const lockTtl = config?.lockTtlMs || 600000;
-    return new DistributedLockService(lockKey, lockTtl, this.#cacheLayer);
+    return new DistributedLockService(lockKey, lockTtl, this._cacheLayer);
   }
 
   _createMonitorService(_config) {
@@ -103,11 +106,11 @@ class AbstractProducer {
   }
 
   #initializeDependencies(config) {
-    this.#cacheLayer = this._createCacheLayer(config);
-    this.#distributedLockService = this._createDistributedLockService(config);
-    this.#monitorService = this._createMonitorService(config);
-    this.#isShuttingDown = false;
-    this.#isConnected = false;
+    this._cacheLayer = this._createCacheLayer(config);
+    this._distributedLockService = this._createDistributedLockService(config);
+    this._monitorService = this._createMonitorService(config);
+    this._isShuttingDown = false;
+    this._isConnected = false;
   }
 
   #validateAndInitialize(config) {
@@ -124,13 +127,13 @@ class AbstractProducer {
   }
 
   async #handleGracefulShutdownProducer(signal = "unknown") {
-    console.log(`\n SIGNAL ${signal}`);
-    if (this.#isShuttingDown) {
+    console.log(`\n SIGNAL RECEIVED: ${signal}`);
+    if (this._isShuttingDown) {
       return;
     }
 
     try {
-      this.#isShuttingDown = true;
+      this._isShuttingDown = true;
       logger.logInfo(
         `⏼ ${this.getBrokerType().toUpperCase()} producer received ${signal} signal, shutting down gracefully`
       );
@@ -160,28 +163,28 @@ class AbstractProducer {
 
   _logConfigurationLoaded() {
     logger.logDebug(
-      `🐞${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this.config, null, 2)}`
+      `🐞${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
     );
   }
 
   #isAlreadyConnected() {
-    return this.#isConnected;
+    return this._isConnected;
   }
 
   async #connectCacheIfAvailable() {
-    if (!this.#cacheLayer) {
+    if (!this._cacheLayer) {
       return;
     }
 
-    await this.#cacheLayer.connect();
+    await this._cacheLayer.connect();
     logger.logInfo(`🔌 ${this.getBrokerType().toUpperCase()} producer connected to cache layer`);
   }
 
   async #connectToMonitorServiceIfAvailable() {
-    if (!this.#monitorService) {
+    if (!this._monitorService) {
       return;
     }
-    await this.#monitorService.connect();
+    await this._monitorService.connect();
     logger.logInfo(`ℹ️ ${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`);
   }
 
@@ -196,11 +199,11 @@ class AbstractProducer {
   }
 
   #markAsConnected() {
-    this.#isConnected = true;
+    this._isConnected = true;
   }
 
   #markAsDisconnected() {
-    this.#isConnected = false;
+    this._isConnected = false;
   }
 
   /**
@@ -230,8 +233,8 @@ class AbstractProducer {
 
   async #disconnectCacheIfAvailable() {
     try {
-      await this.#cacheLayer?.disconnect();
-      this.#cacheLayer = null;
+      await this._cacheLayer?.disconnect();
+      this._cacheLayer = null;
       logger.logInfo(`${this.getBrokerType()} producer disconnected from cache layer`);
     } catch (error) {
       logger.logWarning(`Error disconnecting from cache layer`, error);
@@ -240,8 +243,8 @@ class AbstractProducer {
 
   async #disConnectToMonitorServiceIfAvailable() {
     try {
-      await this.#monitorService?.disconnect();
-      this.#monitorService = null;
+      await this._monitorService?.disconnect();
+      this._monitorService = null;
       logger.logInfo(`${this.getBrokerType()} producer disconnected from monitor layer`);
     } catch (error) {
       logger.logWarning(`Error disconnecting from monitor layer`, error);
@@ -250,8 +253,8 @@ class AbstractProducer {
 
   async #cleanDistributedLockIfAvailable() {
     try {
-      await this.#distributedLockService?.release();
-      this.#distributedLockService = null;
+      await this._distributedLockService?.release();
+      this._distributedLockService = null;
       logger.logInfo(`${this.getBrokerType()} producer stop distributed lock service`);
     } catch (error) {
       logger.logWarning(`Error stop distributed lock service`, error);
@@ -285,37 +288,27 @@ class AbstractProducer {
     }
   }
 
-  #ensureConnected() {
-    if (this.#isShuttingDown) {
-      throw new Error(`${this.getBrokerType()} producer is shutting down`);
-    }
-
-    if (!this.#isAlreadyConnected()) {
-      throw new Error(`${this.getBrokerType()} producer is not connected`);
-    }
-  }
-
   async #handleExtendedBackpressure() {
     try {
-      const status = await this.#monitorService.getBackpressureStatus();
+      const status = await this._monitorService.getBackpressureStatus();
       const delay = status.recommendedDelay || 1000;
 
       logger.logWarning(`‼️ Backpressure detected (${status.backpressureLevel}), pausing for ${delay}ms`, {
-        topic: this.#topic,
+        topic: this._topic,
         brokerType: this.getBrokerType(),
         metrics: status.metrics,
       });
 
       await new Promise(resolve => setTimeout(resolve, delay));
 
-      const stillInBackpressure = await this.#monitorService.shouldPauseProcessing();
+      const stillInBackpressure = await this._monitorService.shouldPauseProcessing();
 
       if (stillInBackpressure) {
-        const newStatus = await this.#monitorService.getBackpressureStatus();
+        const newStatus = await this._monitorService.getBackpressureStatus();
         logger.logWarning(
           `‼️ System still under backpressure (${newStatus.backpressureLevel}) after waiting ${delay}ms`,
           {
-            topic: this.#topic,
+            topic: this._topic,
             brokerType: this.getBrokerType(),
             metrics: newStatus.metrics,
           }
@@ -331,12 +324,12 @@ class AbstractProducer {
   }
 
   async #isMessageBrokerUnderPressure() {
-    if (!this.#monitorService) {
+    if (!this._monitorService) {
       return false;
     }
 
     try {
-      const shouldPause = await this.#monitorService.shouldPauseProcessing();
+      const shouldPause = await this._monitorService.shouldPauseProcessing();
       if (shouldPause) {
         return await this.#handleExtendedBackpressure();
       }
@@ -348,12 +341,12 @@ class AbstractProducer {
   }
 
   async #getProcessingIds() {
-    if (!this.#cacheLayer) {
+    if (!this._cacheLayer) {
       return [];
     }
 
     try {
-      return await this.#cacheLayer.getProcessingIds();
+      return await this._cacheLayer.getProcessingIds();
     } catch (error) {
       logger.logWarning("Failed to get processing IDs from cache", error);
       return [];
@@ -361,12 +354,12 @@ class AbstractProducer {
   }
 
   async #getSuppressedIds() {
-    if (!this.#cacheLayer) {
+    if (!this._cacheLayer) {
       return [];
     }
 
     try {
-      return await this.#cacheLayer.getSuppressedIds();
+      return await this._cacheLayer.getSuppressedIds();
     } catch (error) {
       logger.logWarning("Failed to get freezing IDs from cache", error);
       return [];
@@ -374,7 +367,7 @@ class AbstractProducer {
   }
 
   #isSuppressionFullyEnabled() {
-    return this.#cacheLayer && this.#enabledSuppression;
+    return this._cacheLayer && this._enabledSuppression;
   }
 
   async #getExcludedIds() {
@@ -413,7 +406,7 @@ class AbstractProducer {
       error: null,
       itemIds: [],
       details: {
-        topic: this.#topic,
+        topic: this._topic,
         brokerType: this.getBrokerType(),
         timestamp: Date.now(),
         reason: "no_items_found",
@@ -423,11 +416,11 @@ class AbstractProducer {
 
   async #markItemAsSuppressed(items) {
     try {
-      if (!this.#cacheLayer) {
+      if (!this._cacheLayer) {
         return;
       }
       for (const item of items) {
-        await this.#cacheLayer.markAsSuppressed(this.getItemId(item));
+        await this._cacheLayer.markAsSuppressed(this.getItemId(item));
       }
     } catch (error) {
       logger.logError(
@@ -464,12 +457,12 @@ class AbstractProducer {
   }
 
   async #acquireLock(waitTime) {
-    if (!this.#distributedLockService) {
+    if (!this._distributedLockService) {
       return true;
     }
 
     try {
-      return await this.#distributedLockService.acquire(waitTime);
+      return await this._distributedLockService.acquire(waitTime);
     } catch (error) {
       logger.logError(`Error acquiring lock for ${this.getBrokerType()} producer`, error);
       return false;
@@ -495,7 +488,7 @@ class AbstractProducer {
 
   async #releaseLock() {
     try {
-      return await this.#distributedLockService?.release();
+      return await this._distributedLockService?.release();
     } catch (error) {
       logger.logWarning(`Error releasing lock for ${this.getBrokerType()} producer`, error);
       return false;
@@ -602,7 +595,7 @@ class AbstractProducer {
 
   async #sendItemsToBroker(items, options = {}) {
     this.#ensureConnected();
-    if (this.#distributedLockService) {
+    if (this._distributedLockService) {
       return await this.#sendItemToBrokerWithLock(items, options);
     } else {
       return await this.#sendItemToBrokerWithoutLock(items, options);
@@ -632,9 +625,9 @@ class AbstractProducer {
       skipped,
       error: error ? error.message : null,
       itemIds,
-      items: this.config?.includeItems ? items : undefined,
+      items: this._config?.includeItems ? items : undefined,
       details: {
-        topic: this.#topic,
+        topic: this._topic,
         brokerType: this.getBrokerType(),
         timestamp: Date.now(),
         ...details,
@@ -656,7 +649,7 @@ class AbstractProducer {
       return;
     }
 
-    logger.logInfo(`Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this.#topic} topic`);
+    logger.logInfo(`Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this._topic} topic`);
   }
 
   /**
@@ -667,51 +660,84 @@ class AbstractProducer {
    * @returns {Promise<Object>} Production result with counts and details
    */
   async produce(criteria, limit, options = {}) {
+    const emptyResult = this.#creatEmptyResult();
     try {
       this.#ensureConnected();
-      const isUnderPressure = await this.#isMessageBrokerUnderPressure();
-      if (isUnderPressure) {
+      if (!(await this.#hasTopic())) {
+        logger.logDebug(`No ${this._topic} existed, safely ignore this time`);
+        return emptyResult;
+      }
+      const isPressure = await this.#isMessageBrokerUnderPressure();
+      if (isPressure) {
         logger.logWarning("☢️ System is under pressure, stop sending new items");
-        return this.#creatEmptyResult();
+        return emptyResult;
       }
       const excludedIds = await this.#getExcludedIds();
       const items = await this.getNextItems(criteria, limit, excludedIds);
       if (this.#itemNotFound(items)) {
-        return this.#creatEmptyResult();
+        return emptyResult;
       }
-
       const result = await this.#processItems(items, options);
       this.#logProductionSuccess(result);
-
       return result;
     } catch (error) {
-      logger.logError(`Failed to produce messages to ${this.#topic} topic`, error);
-      throw error;
+      logger.logError(`Failed to produce messages to ${this._topic} topic`, error);
+      return emptyResult;
     }
   }
 
+  #ensureConnected() {
+    if (this._isShuttingDown) {
+      throw new Error(`${this.getBrokerType()} producer is shutting down`);
+    }
+
+    if (!this.#isAlreadyConnected()) {
+      throw new Error(`${this.getBrokerType()} producer is not connected`);
+    }
+  }
+
+  async #hasTopic() {
+    try {
+      if (this._topicExisted) {
+        return true;
+      }
+      this._topicExisted = await this._isTopicExisted();
+      return this._topicExisted;
+    } catch (error) {
+      logger.logWarning(
+        `Failed to check topic [ ${this._topic} ] existed or not, safely ignore as none. Due ${error.message}`
+      );
+      return false;
+    }
+  }
+
+  async _isTopicExisted() {
+    logger.logWarning(`This should be implemented in subclass, otherwise assume it yes`);
+    return true;
+  }
+
   #isCacheConnected() {
-    return this.#cacheLayer ? this.#cacheLayer.isConnected() : false;
+    return this._cacheLayer ? this._cacheLayer.isConnected() : false;
   }
 
   _getStatusConfig() {
     return {
       enabledSuppression: this.#isSuppressionFullyEnabled(),
-      enabledDistributedLock: this.#enabledDistributedLock && Boolean(this.#distributedLockService),
-      enabledBackpressure: Boolean(this.#monitorService),
-      enabledCache: Boolean(this.#cacheLayer),
+      enabledDistributedLock: this._enabledDistributedLock && Boolean(this._distributedLockService),
+      enabledBackpressure: Boolean(this._monitorService),
+      enabledCache: Boolean(this._cacheLayer),
     };
   }
 
   #getLockStatus() {
-    if (!this.#distributedLockService) {
+    if (!this._distributedLockService) {
       return { enabled: false };
     }
 
     return {
       enabled: true,
-      key: this.#distributedLockService.getLockKey(),
-      ttl: this.#distributedLockService.getLockTtl(),
+      key: this._distributedLockService.getLockKey(),
+      ttl: this._distributedLockService.getLockTtl(),
     };
   }
 
@@ -724,9 +750,9 @@ class AbstractProducer {
       brokerType: this.getBrokerType(),
       connected: this.#isAlreadyConnected(),
       cacheConnected: this.#isCacheConnected(),
-      topic: this.#topic,
+      topic: this._topic,
       enabledSuppression: this.#isSuppressionFullyEnabled(),
-      config: this._getStatusConfig(),
+      _config: this._getStatusConfig(),
       lock: this.#getLockStatus(),
     };
   }
@@ -736,7 +762,7 @@ class AbstractProducer {
    * @returns {Object|null} Backpressure monitor
    */
   getBackpressureMonitor() {
-    return this.#monitorService;
+    return this._monitorService;
   }
 }
 

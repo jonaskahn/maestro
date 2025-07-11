@@ -9,7 +9,7 @@
  * @exports {Class} KafkaConsumer - Kafka implementation of message consumer
  * @exports {Class} KafkaProducer - Kafka implementation of message producer
  * @exports {Class} KafkaMonitorService - Backpressure monitoring for Kafka
- * @exports {Object} KafkaManager - Utility for Kafka client management and operations
+ * @exports {Object} KafkaManager - Utility for Kafka _client management and operations
  */
 
 const KafkaConsumer = require("./kafka-consumer");

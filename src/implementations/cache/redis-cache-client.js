@@ -16,15 +16,15 @@ const logger = require("../../services/logger-service");
 class RedisCacheClient extends AbstractCache {
   constructor(config) {
     super(config);
-    this.client = this.#createRedisClient();
+    this._client = this.#createRedisClient();
   }
 
   #createRedisClient() {
     const connectionOptions = this.config.connectionOptions || {};
 
     const clientConfig = {
-      url: connectionOptions.url || process.env.JO_REDIS_URL || "redis://localhost:6379",
-      password: connectionOptions.password || process.env.JO_REDIS_PASSWORD,
+      url: connectionOptions.url || process.env.MO_REDIS_URL || "redis://localhost:6379",
+      password: connectionOptions.password || process.env.MO_REDIS_PASSWORD,
       retry_strategy: this.#createRetryStrategy(),
       socket: {
         reconnectStrategy: this.#createReconnectionStrategy(),
@@ -39,9 +39,9 @@ class RedisCacheClient extends AbstractCache {
   }
 
   #createRetryStrategy() {
-    const maxRetryAttempts = parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
-    const retryDelayMs = parseInt(process.env.JO_REDIS_DELAY_MS) || 1000;
-    const maxDelayMs = parseInt(process.env.JO_REDIS_MAX_DELAY_MS) || 30000;
+    const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
+    const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
+    const maxDelayMs = parseInt(process.env.MO_REDIS_MAX_DELAY_MS) || 30000;
 
     return attemptNumber => {
       if (attemptNumber > maxRetryAttempts) {
@@ -56,9 +56,9 @@ class RedisCacheClient extends AbstractCache {
   }
 
   #createReconnectionStrategy() {
-    const maxRetryAttempts = parseInt(process.env.JO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
-    const retryDelayMs = parseInt(process.env.JO_REDIS_DELAY_MS) || 1000;
-    const maxDelayMs = parseInt(process.env.JO_REDIS_MAX_DELAY_MS) || 30000;
+    const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
+    const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
+    const maxDelayMs = parseInt(process.env.MO_REDIS_MAX_DELAY_MS) || 30000;
 
     return retryAttemptNumber => {
       if (retryAttemptNumber > maxRetryAttempts) {
@@ -74,39 +74,39 @@ class RedisCacheClient extends AbstractCache {
 
   #attachEventHandlers(client) {
     client.on("error", error => {
-      logger.logError("❌ Redis client error", error);
+      logger.logError("❌ Redis _client error", error);
     });
 
     client.on("connect", () => {
-      logger.logConnectionEvent("ℹ️ Redis", "client connected");
+      logger.logConnectionEvent("ℹ️ Redis", "_client connected");
     });
 
     client.on("ready", () => {
-      logger.logConnectionEvent("ℹ️ Redis", "client ready");
+      logger.logConnectionEvent("ℹ️ Redis", "_client ready");
     });
 
     client.on("end", () => {
-      logger.logConnectionEvent("Redis", "🔚 client disconnected");
+      logger.logConnectionEvent("Redis", "🔚 _client disconnected");
     });
 
     client.on("reconnecting", () => {
-      logger.logConnectionEvent("Redis", "🔄 client reconnecting");
+      logger.logConnectionEvent("Redis", "🔄 _client reconnecting");
     });
   }
 
   _checkExistingConnection() {
-    return this.client && this.client.isOpen;
+    return this._client && this._client.isOpen;
   }
 
   async _connectTo() {
-    if (!this.client.isOpen) {
-      await this.client.connect();
+    if (!this._client.isOpen) {
+      await this._client.connect();
     }
   }
 
   async _disconnectFrom() {
-    if (this.client.isOpen) {
-      await this.client.disconnect();
+    if (this._client.isOpen) {
+      await this._client.disconnect();
     }
   }
 
@@ -120,25 +120,25 @@ class RedisCacheClient extends AbstractCache {
   async _setKeyValue(key, value, ttlMs) {
     if (ttlMs) {
       const ttlSeconds = Math.ceil(ttlMs / 1000);
-      await this.client.set(key, value, {
+      await this._client.set(key, value, {
         EX: ttlSeconds,
       });
     } else {
-      await this.client.set(key, value);
+      await this._client.set(key, value);
     }
     return true;
   }
 
   async _getKeyValue(key) {
-    return await this.client.get(key);
+    return await this._client.get(key);
   }
 
   async _deleteKey(key) {
-    return await this.client.del(key);
+    return await this._client.del(key);
   }
 
   async _checkKeyExists(key) {
-    return await this.client.exists(key);
+    return await this._client.exists(key);
   }
 
   /**
@@ -149,14 +149,14 @@ class RedisCacheClient extends AbstractCache {
    */
   async _setKeyExpiry(key, ttlMs) {
     const ttlSeconds = Math.ceil(ttlMs / 1000);
-    return await this.client.expire(key, ttlSeconds);
+    return await this._client.expire(key, ttlSeconds);
   }
 
   async _findKeysByPattern(pattern) {
     try {
       const sentKeys = [];
       let scanCount = 0;
-      for await (const keys of this.client.scanIterator({
+      for await (const keys of this._client.scanIterator({
         MATCH: pattern,
         COUNT: 1000,
       })) {
@@ -184,12 +184,12 @@ class RedisCacheClient extends AbstractCache {
     let result;
     if (ttlMs) {
       const ttlSeconds = Math.ceil(ttlMs / 1000);
-      result = await this.client.set(key, value, {
+      result = await this._client.set(key, value, {
         EX: ttlSeconds,
         NX: true,
       });
     } else {
-      result = await this.client.set(key, value, {
+      result = await this._client.set(key, value, {
         NX: true,
       });
     }

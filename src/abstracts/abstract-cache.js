@@ -38,9 +38,9 @@ const CONNECTION_STATES = {
 };
 
 const ENV_KEYS = {
-  CACHE_KEY_PREFIX: ["JO_CACHE_KEY_PREFIX"],
-  PROCESSING_SUFFIX: ["JO_CACHE_KEY_SUFFIXES_PROCESSING"],
-  FREEZING_SUFFIX: ["JO_CACHE_KEY_SUFFIXES_FREEZING"],
+  CACHE_KEY_PREFIX: ["MO_CACHE_KEY_PREFIX"],
+  PROCESSING_SUFFIX: ["MO_CACHE_KEY_SUFFIXES_PROCESSING"],
+  FREEZING_SUFFIX: ["MO_CACHE_KEY_SUFFIXES_FREEZING"],
 };
 
 /**
@@ -49,7 +49,7 @@ const ENV_KEYS = {
  * with job orchestration features including processing state management and message tracking
  */
 class AbstractCache {
-  #isConnected;
+  _isConnected;
 
   /**
    * Create cache instance with configuration validation and initialization
@@ -88,7 +88,7 @@ class AbstractCache {
       suppressionTtl: this.config.suppressionTtl,
     });
 
-    this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+    this._isConnected = CONNECTION_STATES.DISCONNECTED;
   }
 
   isNonEmptyString(value) {
@@ -111,16 +111,16 @@ class AbstractCache {
    */
   async connect() {
     if (await this._checkExistingConnection()) {
-      this.#isConnected = CONNECTION_STATES.CONNECTED;
+      this._isConnected = CONNECTION_STATES.CONNECTED;
       logger.logDebug(`Using existing connection to ${this.implementation} cache`);
       return;
     }
 
     try {
       await this._connectTo();
-      this.#isConnected = CONNECTION_STATES.CONNECTED;
+      this._isConnected = CONNECTION_STATES.CONNECTED;
     } catch (error) {
-      this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+      this._isConnected = CONNECTION_STATES.DISCONNECTED;
       logger.logError(`Failed to connect to ${this.implementation} cache`, error);
       throw error;
     }
@@ -142,20 +142,20 @@ class AbstractCache {
     if (this.isConnected()) {
       try {
         await this._disconnectFrom();
-        this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+        this._isConnected = CONNECTION_STATES.DISCONNECTED;
       } catch (error) {
         logger.logWarning(`Error disconnecting from ${this.implementation} cache`, error);
-        this.#isConnected = CONNECTION_STATES.DISCONNECTED;
+        this._isConnected = CONNECTION_STATES.DISCONNECTED;
       }
     }
   }
 
   isConnected() {
-    return this.#isConnected === CONNECTION_STATES.CONNECTED;
+    return this._isConnected === CONNECTION_STATES.CONNECTED;
   }
 
   isDisconnected() {
-    return this.#isConnected === CONNECTION_STATES.DISCONNECTED;
+    return this._isConnected === CONNECTION_STATES.DISCONNECTED;
   }
 
   async _disconnectFrom() {

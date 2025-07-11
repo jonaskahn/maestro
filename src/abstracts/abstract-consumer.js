@@ -19,8 +19,8 @@ const DEFAULT_VALUES = {
 };
 
 const ENV_KEYS = {
-  MAX_CONCURRENT_MESSAGES: ["JO_MAX_CONCURRENT_MESSAGES"],
-  STATUS_REPORT_INTERVAL: ["JO_STATUS_REPORT_INTERVAL"],
+  MAX_CONCURRENT_MESSAGES: ["MO_MAX_CONCURRENT_MESSAGES"],
+  STATUS_REPORT_INTERVAL: ["MO_STATUS_REPORT_INTERVAL"],
 };
 
 const CONSUMER_STATES = {
@@ -37,12 +37,14 @@ const METRICS_PROPERTIES = {
 };
 
 class AbstractConsumer {
-  #cacheLayer;
-  #isConnected;
-  #isConsuming;
-  #statusReportInterval;
-  #statusReportTimer;
-  #isShuttingDown;
+  _cacheLayer;
+
+  _isConnected;
+  _isConsuming;
+  _isShuttingDown;
+
+  _statusReportInterval;
+  _statusReportTimer;
 
   /**
    * Create consumer instance with configuration validation and initialization
@@ -127,7 +129,7 @@ class AbstractConsumer {
   }
 
   #setStatusReporting(config) {
-    this.#statusReportInterval = this.#resolveStatusReportInterval(config);
+    this._statusReportInterval = this.#resolveStatusReportInterval(config);
   }
 
   #initializeConfiguration(config) {
@@ -143,15 +145,15 @@ class AbstractConsumer {
   }
 
   #initializeDependencies(config) {
-    this.#cacheLayer = this._createCacheLayer(config?.cacheOptions);
-    this.#isShuttingDown = false;
+    this._cacheLayer = this._createCacheLayer(config?.cacheOptions);
+    this._isShuttingDown = false;
   }
 
   #initializeState() {
-    this.#isConnected = CONSUMER_STATES.DISCONNECTED;
-    this.#isConsuming = CONSUMER_STATES.NOT_CONSUMING;
-    this.#statusReportTimer = null;
-    this.#isShuttingDown = false;
+    this._isConnected = CONSUMER_STATES.DISCONNECTED;
+    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+    this._statusReportTimer = null;
+    this._isShuttingDown = false;
   }
 
   _removeShutdownListeners() {
@@ -162,7 +164,7 @@ class AbstractConsumer {
   }
 
   #markAsNotConsuming() {
-    this.#isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
   }
 
   async _stopConsumingFromBroker() {
@@ -170,7 +172,7 @@ class AbstractConsumer {
   }
 
   #isCurrentlyConsuming() {
-    return this.#isConsuming === CONSUMER_STATES.CONSUMING;
+    return this._isConsuming === CONSUMER_STATES.CONSUMING;
   }
 
   async stopConsuming() {
@@ -184,9 +186,9 @@ class AbstractConsumer {
       this.#markAsNotConsuming();
       logger.logInfo(`${this.getBrokerType()} consumer stopped consuming from ${this.topic}`);
 
-      if (this.#statusReportTimer) {
-        clearInterval(this.#statusReportTimer);
-        this.#statusReportTimer = null;
+      if (this._statusReportTimer) {
+        clearInterval(this._statusReportTimer);
+        this._statusReportTimer = null;
       }
     } catch (error) {
       logger.logError(`Error stopping consumption from ${this.topic}`, error);
@@ -194,7 +196,7 @@ class AbstractConsumer {
   }
 
   async #stopConsumingIfActive() {
-    if (this.#isConsuming === CONSUMER_STATES.CONSUMING) {
+    if (this._isConsuming === CONSUMER_STATES.CONSUMING) {
       await this.stopConsuming();
     }
   }
@@ -204,12 +206,12 @@ class AbstractConsumer {
   }
 
   async #disconnectFromCache() {
-    if (!this.#cacheLayer) {
+    if (!this._cacheLayer) {
       return;
     }
 
     try {
-      await this.#cacheLayer.disconnect();
+      await this._cacheLayer.disconnect();
       logger.logInfo(`${this.getBrokerType()} consumer disconnected from cache layer`);
     } catch (error) {
       logger.logWarning("Error disconnecting from cache layer", error);
@@ -223,16 +225,16 @@ class AbstractConsumer {
   }
 
   #isCurrentlyConnected() {
-    return this.#isConnected === CONSUMER_STATES.CONNECTED;
+    return this._isConnected === CONSUMER_STATES.CONNECTED;
   }
 
   async #handleGracefulShutdownConsumer(signal = "unknown") {
-    if (this.#isShuttingDown) {
+    if (this._isShuttingDown) {
       return;
     }
 
     try {
-      this.#isShuttingDown = true;
+      this._isShuttingDown = true;
       logger.logInfo(`${this.getBrokerType()} consumer received ${signal} signal, shutting down gracefully`);
       if (this.#isCurrentlyConsuming()) {
         logger.logInfo(`Stopping message consumption`);
@@ -290,16 +292,16 @@ class AbstractConsumer {
   }
 
   #isAlreadyConnected() {
-    return this.#isConnected === CONSUMER_STATES.CONNECTED;
+    return this._isConnected === CONSUMER_STATES.CONNECTED;
   }
 
   async #connectToCache() {
-    if (!this.#cacheLayer) {
+    if (!this._cacheLayer) {
       return;
     }
 
     try {
-      await this.#cacheLayer.connect();
+      await this._cacheLayer.connect();
       logger.logInfo(`🔌 ${this.getBrokerType()?.toUpperCase()} consumer connected to cache layer`);
     } catch (error) {
       logger.logWarning("Failed to connect to cache layer, continuing without cache", error);
@@ -316,11 +318,11 @@ class AbstractConsumer {
   }
 
   #markAsConnected() {
-    this.#isConnected = CONSUMER_STATES.CONNECTED;
+    this._isConnected = CONSUMER_STATES.CONNECTED;
   }
 
   #handleConnectionError(error) {
-    this.#isConnected = CONSUMER_STATES.DISCONNECTED;
+    this._isConnected = CONSUMER_STATES.DISCONNECTED;
     logger.logError(`Failed to connect ${this.getBrokerType()} consumer`, error);
   }
 
@@ -344,13 +346,13 @@ class AbstractConsumer {
   }
 
   #markAsDisconnected() {
-    this.#isConnected = CONSUMER_STATES.DISCONNECTED;
+    this._isConnected = CONSUMER_STATES.DISCONNECTED;
   }
 
   #handleDisconnectionError(error) {
     logger.logError(`Error disconnecting ${this.getBrokerType()} consumer`, error);
-    this.#isConsuming = CONSUMER_STATES.NOT_CONSUMING;
-    this.#isConnected = CONSUMER_STATES.DISCONNECTED;
+    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+    this._isConnected = CONSUMER_STATES.DISCONNECTED;
   }
 
   /**
@@ -375,7 +377,7 @@ class AbstractConsumer {
   }
 
   #ensureConnected() {
-    if (this.#isShuttingDown) {
+    if (this._isShuttingDown) {
       throw new Error(`${this.getBrokerType()} consumer is shutting down`);
     }
 
@@ -389,21 +391,21 @@ class AbstractConsumer {
   }
 
   _handleConsumingStartError(error) {
-    this.#isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
     logger.logError(`Failed to start consuming from ${this.topic}`, error);
   }
 
   #startStatusReporting() {
-    if (this.#statusReportTimer) {
-      clearInterval(this.#statusReportTimer);
+    if (this._statusReportTimer) {
+      clearInterval(this._statusReportTimer);
     }
 
-    this.#statusReportTimer = setInterval(() => {
+    this._statusReportTimer = setInterval(() => {
       const status = this.getConfigStatus();
       logger.logInfo(
         `${this.getBrokerType()} consumer status: processed=${status.processedCount}, failed=${status.failedCount}, active=0`
       );
-    }, this.#statusReportInterval);
+    }, this._statusReportInterval);
   }
 
   /**
@@ -415,17 +417,17 @@ class AbstractConsumer {
   async consume(options = {}) {
     this.#ensureConnected();
 
-    if (this.#isConsuming === CONSUMER_STATES.CONSUMING) {
+    if (this._isConsuming === CONSUMER_STATES.CONSUMING) {
       logger.logWarning(`${this.getBrokerType()} consumer is already consuming messages`);
       return;
     }
 
     try {
       await this._startConsumingFromBroker(options);
-      this.#isConsuming = CONSUMER_STATES.CONSUMING;
+      this._isConsuming = CONSUMER_STATES.CONSUMING;
       logger.logInfo(`${this.getBrokerType()} consumer started consuming from ${this.topic}`);
 
-      if (this.#statusReportInterval > 0) {
+      if (this._statusReportInterval > 0) {
         this.#startStatusReporting();
       }
     } catch (error) {
@@ -473,10 +475,10 @@ class AbstractConsumer {
 
   async #markAsProcessingStart(itemId) {
     try {
-      if (!this.#cacheLayer) {
+      if (!this._cacheLayer) {
         return false;
       }
-      return await this.#cacheLayer?.markAsProcessing(itemId);
+      return await this._cacheLayer?.markAsProcessing(itemId);
     } catch (error) {
       logger.logWarning(`Failed to mark item ${itemId} as processing start`, error);
       return false;
@@ -484,11 +486,11 @@ class AbstractConsumer {
   }
 
   async #markAsProcessingEnd(itemId) {
-    if (this.#cacheLayer) {
+    if (this._cacheLayer) {
       return;
     }
     try {
-      return await this.#cacheLayer?.markAsCompletedProcessing(itemId);
+      return await this._cacheLayer?.markAsCompletedProcessing(itemId);
     } catch (error) {
       logger.logWarning(`Failed to mark item ${itemId} as processing completed`, error);
       return false;
@@ -560,7 +562,7 @@ class AbstractConsumer {
   }
 
   #isCacheConnected() {
-    return this.#cacheLayer ? this.#cacheLayer.isConnected : false;
+    return this._cacheLayer ? this._cacheLayer.isConnected : false;
   }
 
   getConfigStatus() {

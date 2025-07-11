@@ -138,7 +138,7 @@ describe("AbstractCache", () => {
       expect(() => new TestCache({ keyPrefix: " " })).toThrow("keyPrefix is required and must be a non-empty string");
     });
 
-    it("should apply default values for optional config parameters", () => {
+    it("should apply default values for optional _config parameters", () => {
       const minimalConfig = { keyPrefix: "minimal:" };
       const instance = new TestCache(minimalConfig);
 
@@ -152,9 +152,9 @@ describe("AbstractCache", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        JO_CACHE_KEY_PREFIX: "env:",
-        JO_CACHE_KEY_SUFFIXES_PROCESSING: "_PROC:",
-        JO_CACHE_KEY_SUFFIXES_FREEZING: "_FREEZE:",
+        MO_CACHE_KEY_PREFIX: "env:",
+        MO_CACHE_KEY_SUFFIXES_PROCESSING: "_PROC:",
+        MO_CACHE_KEY_SUFFIXES_FREEZING: "_FREEZE:",
       };
 
       const envInstance = new TestCache({ keyPrefix: "env:" });
@@ -342,7 +342,7 @@ describe("AbstractCache", () => {
     it("should mark items as processing", async () => {
       await cacheInstance.markAsProcessing(itemId);
 
-      const processingKey = `${cacheInstance.config.processingPrefix}${itemId}`;
+      const processingKey = `${cacheInstance._config.processingPrefix}${itemId}`;
       expect(await cacheInstance.exists(processingKey)).toBe(true);
     });
 
@@ -359,14 +359,14 @@ describe("AbstractCache", () => {
       await cacheInstance.markAsProcessing(itemId);
       await cacheInstance.markAsCompletedProcessing(itemId);
 
-      const processingKey = `${cacheInstance.config.processingPrefix}${itemId}`;
+      const processingKey = `${cacheInstance._config.processingPrefix}${itemId}`;
       expect(await cacheInstance.exists(processingKey)).toBe(false);
     });
 
     it("should mark items as suppressed", async () => {
       await cacheInstance.markAsSuppressed(itemId);
 
-      const suppressedKey = `${cacheInstance.config.suppressionPrefix}${itemId}`;
+      const suppressedKey = `${cacheInstance._config.suppressionPrefix}${itemId}`;
       expect(await cacheInstance.exists(suppressedKey)).toBe(true);
     });
 

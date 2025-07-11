@@ -120,7 +120,7 @@ describe("AbstractConsumer", () => {
       expect(() => new AbstractConsumer(validConfig)).toThrow("AbstractConsumer cannot be instantiated directly");
     });
 
-    it("should throw error when instantiating with invalid config", () => {
+    it("should throw error when instantiating with invalid _config", () => {
       expect(() => new TestConsumer()).toThrow("Consumer configuration must be an object");
       expect(() => new TestConsumer("invalid")).toThrow("Consumer configuration must be an object");
       expect(() => new TestConsumer({})).toThrow("Consumer configuration must include a topic string");
@@ -153,7 +153,7 @@ describe("AbstractConsumer", () => {
       expect(consumerInstance.getBrokerType()).toBe("test-broker");
     });
 
-    it("should use default values when config values are missing", () => {
+    it("should use default values when _config values are missing", () => {
       const minimalConfig = {
         topic: "minimal-topic",
         cacheOptions: { keyPrefix: "test:" },
@@ -169,8 +169,8 @@ describe("AbstractConsumer", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        JO_MAX_CONCURRENT_MESSAGES: "5",
-        JO_STATUS_REPORT_INTERVAL: "1000",
+        MO_MAX_CONCURRENT_MESSAGES: "5",
+        MO_STATUS_REPORT_INTERVAL: "1000",
       };
 
       consumerInstance = new TestConsumer({
@@ -376,7 +376,7 @@ describe("AbstractConsumer", () => {
       expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-broker consumer status:"));
     });
 
-    it("should provide config status with correct metrics", async () => {
+    it("should provide _config status with correct metrics", async () => {
       await consumerInstance.consume();
 
       // Initial status

@@ -110,10 +110,10 @@ describe("AbstractMonitorService", () => {
     });
 
     it("should initialize with custom configuration values", () => {
-      expect(monitorService.config.maxLag).toBe(defaultConfig.maxLag);
-      expect(monitorService.config.enabledResourceLag).toBe(defaultConfig.enabledResourceLag);
-      expect(monitorService.config.checkInterval).toBe(defaultConfig.checkInterval);
-      expect(monitorService.config.rateLimitThreshold).toBe(defaultConfig.rateLimitThreshold);
+      expect(monitorService._config.maxLag).toBe(defaultConfig.maxLag);
+      expect(monitorService._config.enabledResourceLag).toBe(defaultConfig.enabledResourceLag);
+      expect(monitorService._config.checkInterval).toBe(defaultConfig.checkInterval);
+      expect(monitorService._config.rateLimitThreshold).toBe(defaultConfig.rateLimitThreshold);
     });
 
     it("should initialize monitoring as disabled", () => {
@@ -365,7 +365,7 @@ describe("AbstractMonitorService", () => {
     });
 
     it("should ignore resource metrics when enabledResourceLag is false", () => {
-      monitorService.config.enabledResourceLag = false;
+      monitorService._config.enabledResourceLag = false;
       const metrics = { totalLag: 10, cpuUsage: 85, memoryUsage: 30 };
 
       const level = monitorService.calculateBackpressureLevel(metrics);
@@ -396,7 +396,7 @@ describe("AbstractMonitorService", () => {
 
   describe("getResourceBackpressureLevel", () => {
     it("should return NONE when enabledResourceLag is false", () => {
-      monitorService.config.enabledResourceLag = false;
+      monitorService._config.enabledResourceLag = false;
       const metrics = { cpuUsage: 85, memoryUsage: 90 };
 
       const level = monitorService.getResourceBackpressureLevel(metrics);
@@ -490,7 +490,7 @@ describe("AbstractMonitorService", () => {
       const delay = await monitorService.getRecommendedDelay();
 
       expect(delay).toBeGreaterThan(0);
-      expect(delay).toBeLessThanOrEqual(monitorService.config.maxDelay);
+      expect(delay).toBeLessThanOrEqual(monitorService._config.maxDelay);
     });
   });
 });

@@ -10,28 +10,18 @@ const Logger = require("../utils/logger");
 
 const SIMULATION_DELAYS = {
   INVENTORY_CHECK: 100,
-  PAYMENT_PROCESSING: 150,
-  ORDER_VALIDATION: 50,
+  PAYMENT_PROCESSING: 60_000,
+  ORDER_VALIDATION: 120_000,
 };
 
 class OrderConsumer extends DefaultConsumer {
   constructor(config = {}) {
-    const topic = config.topic || "ecommerce-orders";
-    const maxConcurrency = config.maxConcurrency || 10;
-    const keyPrefix = config.keyPrefix || "ECOMMERCE";
-    const processingTtl = config.processingTtl || 60000;
-
     super({
-      topic,
-      maxConcurrency,
-      brokerOptions: {
-        clientOptions: {
-          brokers: ["localhost:9092"],
-        },
-      },
+      topic: config.topic || "ecommerce-orders",
+      maxConcurrency: config.maxConcurrency || 10,
       cacheOptions: {
-        keyPrefix,
-        processingTtl,
+        keyPrefix: config.keyPrefix || "ECOMMERCE",
+        processingTtl: config.processingTtl || 240_000,
       },
     });
 

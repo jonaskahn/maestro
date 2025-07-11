@@ -11,34 +11,37 @@
  * with support for message consumption, deserialization, and batching.
  */
 const AbstractConsumer = require("../../../abstracts/abstract-consumer");
-const logger = require("../../../services/logger-service");
-
-// Using the new KafkaManager that combines utilities and client factory
 const KafkaManager = require("./kafka-manager");
 const CacheClientFactory = require("../../cache/cache-client-factory");
+const logger = require("../../../services/logger-service");
 
 class KafkaConsumer extends AbstractConsumer {
+  _groupId;
+  _clientOptions;
+  _consumerOptions;
+  _consumer;
+
   /**
    * Create a new Kafka consumer instance
    * @param {Object} config - Configuration object
    * @param {string} config.topic - Topic to consume from
    * @param {string} config.groupId - Consumer group ID
-   * @param {Object} config.clientOptions - Kafka client connection options
+   * @param {Object} config.clientOptions - Kafka _client connection options
    * @param {Object} config.consumerOptions - Kafka consumer specific options
    * @param {boolean} [config.consumerOptions.fromBeginning=false] - Whether to consume from beginning
    * @param {boolean} [config.consumerOptions.autoCommit=true] - Whether to auto-commit offsets
    */
   constructor(config) {
     super(KafkaManager.standardizeConfig(config, "consumer"));
-    this.groupId = this.config.groupId;
-    this.clientOptions = this.config.clientOptions;
-    this.consumerOptions = this.config.consumerOptions;
-    this.consumer = KafkaManager.createConsumer(null, this.clientOptions, this.consumerOptions);
+    this._groupId = this.config.groupId;
+    this._clientOptions = this.config.clientOptions;
+    this._consumerOptions = this.config.consumerOptions;
+    this._consumer = KafkaManager.createConsumer(null, this._clientOptions, this._consumerOptions);
   }
 
   _createCacheLayer(cacheOptions) {
     if (!cacheOptions) {
-      logger.logWarning("⁉️Cache layer is disabled, config is not yet defined");
+      logger.logWarning("⁉️Cache layer is disabled, _config is not yet defined");
       return null;
     }
     return CacheClientFactory.createClient(cacheOptions);
@@ -53,25 +56,25 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   async _connectToMessageBroker() {
-    await this.consumer.connect();
+    await this._consumer.connect();
     logger.logConnectionEvent("🔌 Kafka Consumer", "connected to Kafka broker");
   }
 
   async _disconnectFromMessageBroker() {
-    if (this.consumer) {
-      await this.consumer.disconnect();
-      this.consumer = null;
+    if (this._consumer) {
+      await this._consumer.disconnect();
+      this._consumer = null;
     }
     logger.logConnectionEvent("Kafka Consumer", "disconnected from Kafka broker");
   }
 
   async _startConsumingFromBroker(_options = {}) {
-    await this.consumer.subscribe({
+    await this._consumer.subscribe({
       topic: this.topic,
-      fromBeginning: this.consumerOptions.fromBeginning,
+      fromBeginning: this._consumerOptions.fromBeginning,
     });
 
-    await this.consumer.run({
+    await this._consumer.run({
       partitionsConsumedConcurrently: this.maxConcurrency,
       eachMessage: async ({ topic, partition, message }) => {
         try {
@@ -86,11 +89,11 @@ class KafkaConsumer extends AbstractConsumer {
             standardizeMessage.messageId,
             standardizeMessage.item
           );
-          if (this.consumerOptions.autoCommit) {
+          if (this._consumerOptions.autoCommit) {
             logger.logDebug(`🔄 Auto-committed message offset ${message.offset}`);
           } else {
             if (!standardizeMessage.committed) {
-              await this.consumer.commitOffsets([
+              await this._consumer.commitOffsets([
                 {
                   topic,
                   partition,
@@ -103,9 +106,9 @@ class KafkaConsumer extends AbstractConsumer {
           }
         } catch (error) {
           logger.logError(`❌ Error processing Kafka message from ${topic}:${partition}:${message.offset}`, error);
-          if (!this.consumerOptions.autoCommit) {
+          if (!this._consumerOptions.autoCommit) {
             try {
-              await this.consumer.commitOffsets([
+              await this._consumer.commitOffsets([
                 {
                   topic,
                   partition,
@@ -121,7 +124,7 @@ class KafkaConsumer extends AbstractConsumer {
       },
     });
 
-    logger.logInfo(`📨 Kafka consumer started for topic '${this.topic}' in group '${this.groupId}'`);
+    logger.logInfo(`📨 Kafka consumer started for topic '${this.topic}' in group '${this._groupId}'`);
   }
 
   /**
@@ -151,19 +154,19 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   async _stopConsumingFromBroker() {
-    await this.consumer?.stop();
+    await this._consumer?.stop();
     logger.logInfo(`⏹️ Kafka consumer stopped for topic '${this.topic}'`);
   }
 
   getConfigStatus() {
     return {
       ...super.getConfigStatus(),
-      groupId: this.groupId,
-      sessionTimeout: this.consumerOptions.sessionTimeout,
-      heartbeatInterval: this.consumerOptions.heartbeatInterval,
-      maxBytesPerPartition: this.consumerOptions.maxBytesPerPartition,
-      autoCommit: this.consumerOptions.autoCommit,
-      fromBeginning: this.consumerOptions.fromBeginning,
+      groupId: this._groupId,
+      sessionTimeout: this._consumerOptions.sessionTimeout,
+      heartbeatInterval: this._consumerOptions.heartbeatInterval,
+      maxBytesPerPartition: this._consumerOptions.maxBytesPerPartition,
+      autoCommit: this._consumerOptions.autoCommit,
+      fromBeginning: this._consumerOptions.fromBeginning,
       partitionsConsumedConcurrently: this.maxConcurrency,
     };
   }

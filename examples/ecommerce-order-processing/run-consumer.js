@@ -64,6 +64,7 @@ class ConsumerDaemon {
 
 async function main() {
   try {
+    require("dotenv").config();
     const daemon = new ConsumerDaemon();
     await daemon.start();
   } catch (error) {

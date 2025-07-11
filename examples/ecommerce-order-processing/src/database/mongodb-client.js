@@ -10,12 +10,12 @@ const Logger = require("../utils/logger");
 
 // Database configuration
 const DB_CONFIG = {
-  url: "mongodb://root:strongpassword@localhost:27017/myapp?authSource=admin",
+  url: "mongodb://127.0.0.1:27017/myapp?authSource=admin",
   dbName: "myapp",
   collections: {
     orders: "orders",
   },
-  orderGenerationRate: 10,
+  orderGenerationRate: 1000,
 };
 
 // State constants for Job Orchestrator compatibility
@@ -27,7 +27,7 @@ const ORDER_STATES = {
 
 class MongoDatabase {
   constructor() {
-    this.client = null;
+    this._client = null;
     this.db = null;
     this.collections = {};
     this.orderCounter = 0;
@@ -58,10 +58,10 @@ class MongoDatabase {
     try {
       Logger.info("Connecting to MongoDB");
 
-      this.client = new MongoClient(DB_CONFIG.url);
-      await this.client.connect();
+      this._client = new MongoClient(DB_CONFIG.url);
+      await this._client.connect();
 
-      this.db = this.client.db(DB_CONFIG.dbName);
+      this.db = this._client.db(DB_CONFIG.dbName);
       this.collections.orders = this.db.collection(DB_CONFIG.collections.orders);
 
       this.isConnected = true;
@@ -76,9 +76,9 @@ class MongoDatabase {
    * Close database connection
    */
   async disconnect() {
-    if (this.client && this.isConnected) {
+    if (this._client && this.isConnected) {
       try {
-        await this.client.close();
+        await this._client.close();
         this.isConnected = false;
         Logger.info("Disconnected from MongoDB");
       } catch (error) {
@@ -143,7 +143,7 @@ class MongoDatabase {
    * @param {Array<string>} excludedIds - List of order IDs to exclude
    * @returns {Array<Object>} Pending orders with required _id and state fields
    */
-  async getPendingOrders(criteria = {}, limit = 10, excludedIds = []) {
+  async getPendingOrders(criteria = {}, limit = 1000, excludedIds = []) {
     // Ensure we're connected and have collections initialized
     if (!this.isConnected || !this.collections.orders) {
       await this.connect();
@@ -506,8 +506,8 @@ class MongoDatabase {
 
     if (count === 0) {
       Logger.info("Initializing database with test data");
-      await this.generateNewOrders(50);
-      Logger.success("Created 50 test orders");
+      await this.generateNewOrders(10000);
+      Logger.success("Created 10000 test orders");
     } else {
       Logger.info(`Database already contains ${count} orders`);
     }

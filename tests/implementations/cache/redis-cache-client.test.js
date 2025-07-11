@@ -31,7 +31,7 @@ describe("RedisCacheClient", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Create mock Redis client with all required methods and event emitter functionality
+    // Create mock Redis _client with all required methods and event emitter functionality
     mockRedisClient = {
       isOpen: true,
       connect: jest.fn().mockResolvedValue(undefined),
@@ -45,18 +45,18 @@ describe("RedisCacheClient", () => {
       on: jest.fn(),
     };
 
-    // Mock redis.createClient to return our mock client
+    // Mock redis.createClient to return our mock _client
     redis.createClient.mockReturnValue(mockRedisClient);
 
     // Create instance of RedisCacheClient
     redisCacheClient = new RedisCacheClient(defaultConfig);
 
-    // Replace the client property with our mock
-    redisCacheClient.client = mockRedisClient;
+    // Replace the _client property with our mock
+    redisCacheClient._client = mockRedisClient;
   });
 
   describe("Constructor and Initialization", () => {
-    it("should create Redis client with provided configuration", () => {
+    it("should create Redis _client with provided configuration", () => {
       expect(redis.createClient).toHaveBeenCalledWith(
         expect.objectContaining({
           url: "redis://test-host:6379",
@@ -69,12 +69,12 @@ describe("RedisCacheClient", () => {
       );
     });
 
-    it("should use environment variables when config not provided", () => {
+    it("should use environment variables when _config not provided", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        JO_REDIS_URL: "redis://env-host:6379",
-        JO_REDIS_PASSWORD: "env-password",
+        MO_REDIS_URL: "redis://env-host:6379",
+        MO_REDIS_PASSWORD: "env-password",
       };
 
       redis.createClient.mockClear();
@@ -90,11 +90,11 @@ describe("RedisCacheClient", () => {
       process.env = originalEnv;
     });
 
-    it("should use defaults when neither config nor env vars are provided", () => {
+    it("should use defaults when neither _config nor env vars are provided", () => {
       const originalEnv = process.env;
       const envVars = { ...process.env };
-      delete envVars.JO_REDIS_URL;
-      delete envVars.JO_REDIS_PASSWORD;
+      delete envVars.MO_REDIS_URL;
+      delete envVars.MO_REDIS_PASSWORD;
       process.env = envVars;
 
       redis.createClient.mockClear();
@@ -109,7 +109,7 @@ describe("RedisCacheClient", () => {
       process.env = originalEnv;
     });
 
-    it("should attach event handlers to Redis client", () => {
+    it("should attach event handlers to Redis _client", () => {
       expect(mockRedisClient.on).toHaveBeenCalledWith("error", expect.any(Function));
       expect(mockRedisClient.on).toHaveBeenCalledWith("connect", expect.any(Function));
       expect(mockRedisClient.on).toHaveBeenCalledWith("ready", expect.any(Function));
@@ -123,7 +123,7 @@ describe("RedisCacheClient", () => {
     let reconnectStrategy;
 
     beforeEach(() => {
-      // Extract the retry and reconnect strategies from the client creation call
+      // Extract the retry and reconnect strategies from the _client creation call
       const clientConfig = redis.createClient.mock.calls[0][0];
       retryStrategy = clientConfig.retry_strategy;
       reconnectStrategy = clientConfig.socket.reconnectStrategy;
@@ -166,9 +166,9 @@ describe("RedisCacheClient", () => {
       const originalEnv = process.env;
       process.env = {
         ...originalEnv,
-        JO_REDIS_MAX_RETRY_ATTEMPTS: "3",
-        JO_REDIS_DELAY_MS: "500",
-        JO_REDIS_MAX_DELAY_MS: "2000",
+        MO_REDIS_MAX_RETRY_ATTEMPTS: "3",
+        MO_REDIS_DELAY_MS: "500",
+        MO_REDIS_MAX_DELAY_MS: "2000",
       };
 
       redis.createClient.mockClear();
@@ -191,7 +191,7 @@ describe("RedisCacheClient", () => {
 
       errorHandler(testError);
 
-      expect(logger.logError).toHaveBeenCalledWith(expect.stringContaining("Redis client error"), testError);
+      expect(logger.logError).toHaveBeenCalledWith(expect.stringContaining("Redis _client error"), testError);
     });
 
     it("should log connection events", () => {
@@ -206,10 +206,10 @@ describe("RedisCacheClient", () => {
       endHandler();
       reconnectingHandler();
 
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith(expect.stringContaining("Redis"), "client connected");
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith(expect.stringContaining("Redis"), "client ready");
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("Redis", expect.stringContaining("client disconnected"));
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("Redis", expect.stringContaining("client reconnecting"));
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith(expect.stringContaining("Redis"), "_client connected");
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith(expect.stringContaining("Redis"), "_client ready");
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith("Redis", expect.stringContaining("_client disconnected"));
+      expect(logger.logConnectionEvent).toHaveBeenCalledWith("Redis", expect.stringContaining("_client reconnecting"));
     });
   });
 

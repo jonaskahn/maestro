@@ -15,7 +15,7 @@ const Logger = require("../src/utils/logger");
 const readline = require("readline");
 
 const DB_CONFIG = {
-  url: database.DB_CONFIG?.url || "mongodb://root:strongpassword@localhost:27017/myapp?authSource=admin",
+  url: database.DB_CONFIG?.url || "mongodb://localhost:27017/myapp?authSource=admin",
   dbName: database.DB_CONFIG?.dbName || "myapp",
   collections: database.DB_CONFIG?.collections || {
     orders: "orders",
