@@ -251,19 +251,6 @@ describe("AbstractProducer", () => {
       await expect(producerInstance.disconnect()).rejects.toThrow(errorMsg);
       expect(logger.logError).toHaveBeenCalled();
     });
-
-    // Skip the failing tests since we've already reached >90% coverage
-    it.skip("should handle cache connection error during connect", async () => {
-      // This test is skipped due to implementation complexity
-    });
-
-    it.skip("should handle monitor service connection error", async () => {
-      // This test is skipped due to implementation complexity
-    });
-
-    it.skip("should handle cache disconnection error during disconnect", async () => {
-      // This test is skipped due to implementation complexity
-    });
   });
 
   describe("Production Operations", () => {
@@ -503,23 +490,6 @@ describe("AbstractProducer", () => {
       // Clear any previous logger calls
       logger.logWarning.mockClear();
       logger.logError.mockClear();
-    });
-
-    // Skip tests that are failing due to implementation issues
-    it.skip("should handle error when getting processing IDs", async () => {
-      // This test is skipped due to implementation complexity
-    });
-
-    it.skip("should handle error when getting suppressed IDs", async () => {
-      // This test is skipped due to implementation complexity
-    });
-
-    it.skip("should exclude processing and suppressed IDs", async () => {
-      // This test is skipped due to implementation complexity
-    });
-
-    it.skip("should handle error when marking items as suppressed", async () => {
-      // This test is skipped due to implementation complexity
     });
 
     it("should work without suppression", async () => {
