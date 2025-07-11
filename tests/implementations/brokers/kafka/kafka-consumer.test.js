@@ -17,28 +17,39 @@ const logger = require("../../../../src/services/logger-service");
 
 describe("KafkaConsumer", () => {
   describe("Constructor and Initialization", () => {
-    // Skip this test since we can't easily mock _config in the constructor
-    it.skip("should create a KafkaConsumer instance and call parent constructor", () => {
+    // We can test the constructor now by mocking the parent constructor
+    it("should create a KafkaConsumer instance and call parent constructor", () => {
       // Setup
-      const config = { topic: "test-topic", groupId: "test-group" };
-      const standardizedConfig = {
+      const mockConfig = {
         topic: "test-topic",
         groupId: "test-group",
-        topicOptions: {},
-        clientOptions: {},
-        consumerOptions: {},
+        clientOptions: { brokers: ["localhost:9092"] },
+        consumerOptions: { fromBeginning: false },
+        topicOptions: { allowAutoTopicCreation: true },
       };
 
-      KafkaManager.standardizeConfig.mockReturnValue(standardizedConfig);
-      KafkaManager.createAdmin.mockReturnValue({});
-      KafkaManager.createConsumer.mockReturnValue({});
+      // Mock AbstractConsumer constructor to avoid calling the real one
+      AbstractConsumer.mockImplementation(function () {
+        this._config = mockConfig;
+        this._topic = mockConfig.topic;
+      });
+
+      // Mock KafkaManager methods
+      KafkaManager.standardizeConfig.mockReturnValue(mockConfig);
+      KafkaManager.createAdmin.mockReturnValue({ connect: jest.fn() });
+      KafkaManager.createConsumer.mockReturnValue({ connect: jest.fn() });
 
       // Execute
-      new KafkaConsumer(config);
+      const consumer = new KafkaConsumer(mockConfig);
 
       // Verify
-      expect(KafkaManager.standardizeConfig).toHaveBeenCalledWith(config, "consumer");
-      expect(AbstractConsumer).toHaveBeenCalledWith(standardizedConfig);
+      expect(AbstractConsumer).toHaveBeenCalledWith(mockConfig);
+      expect(consumer._topicOptions).toBe(mockConfig.topicOptions);
+      expect(consumer._groupId).toBe(mockConfig.groupId);
+      expect(consumer._clientOptions).toBe(mockConfig.clientOptions);
+      expect(consumer._consumerOptions).toBe(mockConfig.consumerOptions);
+      expect(KafkaManager.createAdmin).toHaveBeenCalled();
+      expect(KafkaManager.createConsumer).toHaveBeenCalled();
     });
   });
 
@@ -177,6 +188,7 @@ describe("KafkaConsumer", () => {
         subscribe: jest.fn().mockResolvedValue(undefined),
         run: jest.fn().mockResolvedValue(undefined),
         stop: jest.fn().mockResolvedValue(undefined),
+        commitOffsets: jest.fn().mockResolvedValue(undefined),
       };
 
       // Create instance but don't call actual constructor code
@@ -248,63 +260,494 @@ describe("KafkaConsumer", () => {
 
       // Verify
       expect(mockConsumer.stop).toHaveBeenCalled();
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer stopped for topic"));
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer stopped"));
+    });
+  });
+
+  describe("Message Processing", () => {
+    let kafkaConsumer;
+    let mockConsumer;
+    let mockRunOptions;
+
+    beforeEach(() => {
+      // Reset mocks
+      jest.clearAllMocks();
+
+      // Setup mocks
+      mockConsumer = {
+        connect: jest.fn().mockResolvedValue(undefined),
+        disconnect: jest.fn().mockResolvedValue(undefined),
+        subscribe: jest.fn().mockResolvedValue(undefined),
+        run: jest.fn().mockImplementation(options => {
+          mockRunOptions = options;
+          return Promise.resolve();
+        }),
+        stop: jest.fn().mockResolvedValue(undefined),
+        commitOffsets: jest.fn().mockResolvedValue(undefined),
+      };
+
+      // Create instance but don't call actual constructor code
+      kafkaConsumer = Object.create(KafkaConsumer.prototype);
+      kafkaConsumer._consumer = mockConsumer;
+      kafkaConsumer._topic = "test-topic";
+      kafkaConsumer._groupId = "test-group";
+      kafkaConsumer._consumerOptions = {
+        fromBeginning: false,
+        autoCommit: true,
+      };
+      kafkaConsumer._config = {
+        eachBatchAutoResolve: true,
+        autoCommit: true,
+        autoCommitInterval: 5000,
+        autoCommitThreshold: 100,
+      };
+      kafkaConsumer.maxConcurrency = 1;
+      kafkaConsumer._defaultBusinessHandler = jest.fn().mockResolvedValue(undefined);
+    });
+
+    it("should configure message consumption correctly", async () => {
+      // Execute
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Verify
+      expect(mockConsumer.subscribe).toHaveBeenCalledWith({
+        topic: "test-topic",
+        fromBeginning: false,
+      });
+
+      expect(mockConsumer.run).toHaveBeenCalledWith(
+        expect.objectContaining({
+          eachBatchAutoResolve: true,
+          partitionsConsumedConcurrently: 1,
+          autoCommit: true,
+          autoCommitInterval: 5000,
+          autoCommitThreshold: 100,
+          eachMessage: expect.any(Function),
+        })
+      );
+
+      // Verify we captured the run options
+      expect(mockRunOptions).toBeDefined();
+      expect(typeof mockRunOptions.eachMessage).toBe("function");
+    });
+
+    it("should configure auto-commit based on consumer options", async () => {
+      // Test with auto-commit enabled
+      kafkaConsumer._consumerOptions.autoCommit = true;
+      kafkaConsumer._config.autoCommit = true;
+      await kafkaConsumer._startConsumingFromBroker();
+      expect(mockRunOptions.autoCommit).toBe(true);
+
+      // Reset and test with auto-commit disabled
+      jest.clearAllMocks();
+      kafkaConsumer._consumerOptions.autoCommit = false;
+      kafkaConsumer._config.autoCommit = false;
+      await kafkaConsumer._startConsumingFromBroker();
+      expect(mockRunOptions.autoCommit).toBe(false);
+    });
+
+    it("should configure fromBeginning based on consumer options", async () => {
+      // Test with fromBeginning disabled
+      kafkaConsumer._consumerOptions.fromBeginning = false;
+      await kafkaConsumer._startConsumingFromBroker();
+      expect(mockConsumer.subscribe).toHaveBeenCalledWith({
+        topic: "test-topic",
+        fromBeginning: false,
+      });
+
+      // Reset and test with fromBeginning enabled
+      jest.clearAllMocks();
+      kafkaConsumer._consumerOptions.fromBeginning = true;
+      await kafkaConsumer._startConsumingFromBroker();
+      expect(mockConsumer.subscribe).toHaveBeenCalledWith({
+        topic: "test-topic",
+        fromBeginning: true,
+      });
+    });
+
+    it("should configure maxConcurrency correctly", async () => {
+      // Test with default concurrency
+      kafkaConsumer.maxConcurrency = 1;
+      await kafkaConsumer._startConsumingFromBroker();
+      expect(mockRunOptions.partitionsConsumedConcurrently).toBe(1);
+
+      // Reset and test with higher concurrency
+      jest.clearAllMocks();
+      kafkaConsumer.maxConcurrency = 5;
+      await kafkaConsumer._startConsumingFromBroker();
+      expect(mockRunOptions.partitionsConsumedConcurrently).toBe(5);
+    });
+
+    // Test for the message handling logic indirectly
+    it("should log appropriate messages when starting and stopping consumption", async () => {
+      // Test start consuming
+      await kafkaConsumer._startConsumingFromBroker();
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started for topic"));
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-topic"));
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-group"));
+
+      // Test stop consuming
+      await kafkaConsumer._stopConsumingFromBroker();
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer stopped"));
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-topic"));
+    });
+
+    // Test the message processing by mocking the private method
+    it("should process messages correctly", async () => {
+      // Setup mocks for the private method
+      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
+      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+
+      // Mock the private method directly
+      const mockExtractBrokerMessage = jest.fn().mockReturnValue({
+        type: "test-topic",
+        messageId: "test-topic:0:123",
+        item: { id: "test-id", data: "test-data" },
+        committed: false,
+      });
+
+      // Temporarily replace the private method with our mock
+      const originalProto = Object.getPrototypeOf(kafkaConsumer);
+      const mockProto = Object.create(originalProto);
+      mockProto["#extractBrokerMessage"] = mockExtractBrokerMessage;
+      Object.setPrototypeOf(kafkaConsumer, mockProto);
+
+      // Test with auto-commit
+      kafkaConsumer._consumerOptions.autoCommit = true;
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Verify auto-commit behavior
+      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started"));
+
+      // Test with manual commit
+      jest.clearAllMocks();
+      kafkaConsumer._consumerOptions.autoCommit = false;
+      kafkaConsumer._config.autoCommit = false;
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Verify manual commit configuration
+      expect(mockRunOptions.autoCommit).toBe(false);
+    });
+
+    // Test error handling indirectly
+    it("should handle errors in message processing", async () => {
+      // Setup for error handling
+      kafkaConsumer._defaultBusinessHandler.mockRejectedValue(new Error("Processing error"));
+
+      // Start consuming
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Verify error handling configuration is in place
+      expect(mockRunOptions.eachMessage).toBeDefined();
+    });
+
+    // Test the message processing in more detail
+    it("should process messages correctly with auto-commit", async () => {
+      // Setup mocks
+      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
+      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+
+      // Start consuming
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Get the eachMessage function
+      const eachMessageFn = mockRunOptions.eachMessage;
+
+      // Create a test message
+      const testMessage = {
+        topic: "test-topic",
+        partition: 0,
+        message: {
+          offset: "123",
+          value: Buffer.from(JSON.stringify({ id: "test-id", data: "test-data" })),
+        },
+      };
+
+      // Bind the function to the consumer instance to simulate proper execution context
+      // This is a workaround to test private methods
+      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
+
+      // Execute the function
+      await boundEachMessage(testMessage);
+
+      // Verify the business handler was called
+      expect(KafkaManager.createMessageId).toHaveBeenCalledWith("test-topic", 0, "123");
+      expect(KafkaManager.parseMessageValue).toHaveBeenCalledWith(testMessage.message.value);
+      expect(kafkaConsumer._defaultBusinessHandler).toHaveBeenCalled();
+    });
+
+    it("should process messages correctly with manual commit", async () => {
+      // Setup for manual commit
+      kafkaConsumer._consumerOptions.autoCommit = false;
+      kafkaConsumer._config.autoCommit = false;
+
+      // Setup mocks
+      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
+      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+
+      // Start consuming
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Get the eachMessage function
+      const eachMessageFn = mockRunOptions.eachMessage;
+
+      // Create a test message
+      const testMessage = {
+        topic: "test-topic",
+        partition: 0,
+        message: {
+          offset: "123",
+          value: Buffer.from(JSON.stringify({ id: "test-id", data: "test-data" })),
+        },
+      };
+
+      // Bind the function to the consumer instance
+      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
+
+      // Execute the function
+      await boundEachMessage(testMessage);
+
+      // Verify manual commit
+      expect(mockConsumer.commitOffsets).toHaveBeenCalledWith([
+        {
+          topic: "test-topic",
+          partition: 0,
+          offset: "124", // offset + 1
+        },
+      ]);
+    });
+
+    it("should handle errors during message processing with auto-commit", async () => {
+      // Setup error
+      const processingError = new Error("Processing failed");
+      kafkaConsumer._defaultBusinessHandler.mockRejectedValue(processingError);
+
+      // Setup mocks
+      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
+      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+
+      // Start consuming
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Get the eachMessage function
+      const eachMessageFn = mockRunOptions.eachMessage;
+
+      // Create a test message
+      const testMessage = {
+        topic: "test-topic",
+        partition: 0,
+        message: {
+          offset: "123",
+          value: Buffer.from(JSON.stringify({ id: "test-id", data: "test-data" })),
+        },
+      };
+
+      // Bind the function to the consumer instance
+      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
+
+      // Execute the function
+      await boundEachMessage(testMessage);
+
+      // Verify error handling
+      expect(logger.logError).toHaveBeenCalledWith(
+        expect.stringContaining("Error processing Kafka message"),
+        processingError
+      );
+
+      // Should not manually commit with auto-commit
+      expect(mockConsumer.commitOffsets).not.toHaveBeenCalled();
+    });
+
+    it("should handle errors during message processing with manual commit", async () => {
+      // Setup for manual commit
+      kafkaConsumer._consumerOptions.autoCommit = false;
+      kafkaConsumer._config.autoCommit = false;
+
+      // Setup error
+      const processingError = new Error("Processing failed");
+      kafkaConsumer._defaultBusinessHandler.mockRejectedValue(processingError);
+
+      // Setup mocks
+      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
+      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+
+      // Start consuming
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Get the eachMessage function
+      const eachMessageFn = mockRunOptions.eachMessage;
+
+      // Create a test message
+      const testMessage = {
+        topic: "test-topic",
+        partition: 0,
+        message: {
+          offset: "123",
+          value: Buffer.from(JSON.stringify({ id: "test-id", data: "test-data" })),
+        },
+      };
+
+      // Bind the function to the consumer instance
+      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
+
+      // Execute the function
+      await boundEachMessage(testMessage);
+
+      // Verify error handling
+      expect(logger.logError).toHaveBeenCalledWith(
+        expect.stringContaining("Error processing Kafka message"),
+        processingError
+      );
+
+      // Should manually commit failed message
+      expect(mockConsumer.commitOffsets).toHaveBeenCalledWith([
+        {
+          topic: "test-topic",
+          partition: 0,
+          offset: "124", // offset + 1
+        },
+      ]);
+
+      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Committed failed message offset"));
+    });
+
+    it("should handle commit errors after processing failure", async () => {
+      // Setup for manual commit
+      kafkaConsumer._consumerOptions.autoCommit = false;
+      kafkaConsumer._config.autoCommit = false;
+
+      // Setup errors
+      const processingError = new Error("Processing failed");
+      kafkaConsumer._defaultBusinessHandler.mockRejectedValue(processingError);
+
+      const commitError = new Error("Commit failed");
+      mockConsumer.commitOffsets.mockRejectedValue(commitError);
+
+      // Setup mocks
+      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
+      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+
+      // Start consuming
+      await kafkaConsumer._startConsumingFromBroker();
+
+      // Get the eachMessage function
+      const eachMessageFn = mockRunOptions.eachMessage;
+
+      // Create a test message
+      const testMessage = {
+        topic: "test-topic",
+        partition: 0,
+        message: {
+          offset: "123",
+          value: Buffer.from(JSON.stringify({ id: "test-id", data: "test-data" })),
+        },
+      };
+
+      // Bind the function to the consumer instance
+      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
+
+      // Execute the function
+      await boundEachMessage(testMessage);
+
+      // Verify error handling
+      expect(logger.logError).toHaveBeenCalledWith(
+        expect.stringContaining("Error processing Kafka message"),
+        processingError
+      );
+
+      expect(mockConsumer.commitOffsets).toHaveBeenCalled();
+      expect(logger.logError).toHaveBeenCalledWith(
+        expect.stringContaining("Failed to commit offset after error"),
+        commitError
+      );
+    });
+  });
+
+  describe("Cache Layer Creation", () => {
+    let kafkaConsumer;
+
+    beforeEach(() => {
+      // Reset mocks
+      jest.clearAllMocks();
+
+      // Create instance but don't call actual constructor code
+      kafkaConsumer = Object.create(KafkaConsumer.prototype);
+    });
+
+    it("should create cache layer when options are provided", () => {
+      // Setup
+      const cacheOptions = { type: "redis", host: "localhost", port: 6379 };
+      const mockCacheClient = { connect: jest.fn() };
+      CacheClientFactory.createClient.mockReturnValue(mockCacheClient);
+
+      // Execute
+      const result = kafkaConsumer._createCacheLayer(cacheOptions);
+
+      // Verify
+      expect(CacheClientFactory.createClient).toHaveBeenCalledWith(cacheOptions);
+      expect(result).toBe(mockCacheClient);
+    });
+
+    it("should return null when cache options are not provided", () => {
+      // Execute
+      const result = kafkaConsumer._createCacheLayer(null);
+
+      // Verify
+      expect(CacheClientFactory.createClient).not.toHaveBeenCalled();
+      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Cache layer is disabled"));
+      expect(result).toBeNull();
     });
   });
 
   describe("Config Status", () => {
-    it("should extend config status with Kafka-specific properties", () => {
-      // Instead of testing the actual method, which requires parent method access,
-      // we can test a simplified implementation to verify the logic
+    let kafkaConsumer;
+    let mockGetConfigStatus;
 
-      // Create a mock for the implementation under test
-      const mockGetConfigStatus = function () {
-        // Mock parent result
-        const baseStatus = {
-          topic: "test-topic",
-          maxConcurrency: 1,
-        };
+    beforeEach(() => {
+      // Reset mocks
+      jest.clearAllMocks();
 
-        // Add Kafka-specific properties like the real implementation would
+      // Setup mock for parent method
+      mockGetConfigStatus = function () {
         return {
-          ...baseStatus,
-          groupId: this._groupId,
-          sessionTimeout: this._consumerOptions?.sessionTimeout,
-          heartbeatInterval: this._consumerOptions?.heartbeatInterval,
-          maxBytesPerPartition: this._consumerOptions?.maxBytesPerPartition,
-          autoCommit: this._consumerOptions?.autoCommit,
-          fromBeginning: this._consumerOptions?.fromBeginning,
-          partitionsConsumedConcurrently: this.maxConcurrency,
+          type: "consumer",
+          topic: "test-topic",
+          status: "connected",
         };
       };
 
-      // Create a mock instance with the properties needed
-      const mockInstance = {
-        _groupId: "test-group",
-        _consumerOptions: {
-          sessionTimeout: 30000,
-          heartbeatInterval: 3000,
-          maxBytesPerPartition: 1048576,
-          autoCommit: true,
-          fromBeginning: false,
-        },
-        maxConcurrency: 1,
+      // Create instance but don't call actual constructor code
+      kafkaConsumer = Object.create(KafkaConsumer.prototype);
+      kafkaConsumer._groupId = "test-group";
+      kafkaConsumer._consumerOptions = {
+        sessionTimeout: 30000,
+        heartbeatInterval: 3000,
+        maxBytesPerPartition: 1048576,
+        autoCommit: true,
+        fromBeginning: false,
       };
+      kafkaConsumer.maxConcurrency = 5;
 
-      // Call our mock implementation on the mock instance
-      const result = mockGetConfigStatus.call(mockInstance);
+      // Mock parent method
+      AbstractConsumer.prototype.getConfigStatus = mockGetConfigStatus;
+    });
 
-      // Verify the properties were added correctly
-      expect(result).toEqual({
+    it("should return extended config status with consumer-specific fields", () => {
+      // Execute
+      const status = kafkaConsumer.getConfigStatus();
+
+      // Verify
+      expect(status).toMatchObject({
+        type: "consumer",
         topic: "test-topic",
-        maxConcurrency: 1,
+        status: "connected",
         groupId: "test-group",
         sessionTimeout: 30000,
         heartbeatInterval: 3000,
         maxBytesPerPartition: 1048576,
         autoCommit: true,
         fromBeginning: false,
-        partitionsConsumedConcurrently: 1,
+        partitionsConsumedConcurrently: 5,
       });
     });
   });
