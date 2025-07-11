@@ -123,7 +123,7 @@ class KafkaConsumer extends AbstractConsumer {
                 },
               ]);
               standardizeMessage.committed = true;
-              logger.logDebug(`☑️ Manually committed message offset ${message.offset}`);
+              logger.logDebug(`☑️ Manually committed message offset ${message.offset} on partition ${partition}`);
             }
           }
         } catch (error) {

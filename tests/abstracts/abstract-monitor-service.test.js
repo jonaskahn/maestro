@@ -5,7 +5,6 @@
 const AbstractMonitorService = require("../../src/abstracts/abstract-monitor-service");
 const logger = require("../../src/services/logger-service");
 
-// Mock dependencies
 jest.mock("../../src/services/logger-service", () => ({
   logInfo: jest.fn(),
   logDebug: jest.fn(),
@@ -13,7 +12,6 @@ jest.mock("../../src/services/logger-service", () => ({
   logError: jest.fn(),
 }));
 
-// Mock TtlConfig
 jest.mock("../../src/config/ttl-config", () => ({
   getBackpressureConfig: jest.fn().mockReturnValue({
     checkInterval: 5000,
@@ -25,7 +23,6 @@ jest.mock("../../src/config/ttl-config", () => ({
   }),
 }));
 
-// Test implementation of AbstractMonitorService
 class TestMonitorService extends AbstractMonitorService {
   getBrokerType() {
     return "test-broker";
@@ -48,7 +45,6 @@ class TestMonitorService extends AbstractMonitorService {
     };
   }
 
-  // Methods to set mock values for testing
   setMockLagMetrics(totalLag, maxPartitionLag = 0, avgLag = 0) {
     this._mockTotalLag = totalLag;
     this._mockMaxPartitionLag = maxPartitionLag;
@@ -81,7 +77,6 @@ describe("AbstractMonitorService", () => {
   });
 
   afterEach(async () => {
-    // Clean up any active monitoring
     if (monitorService.monitoringInterval) {
       await monitorService.stopMonitoring();
     }
@@ -110,7 +105,7 @@ describe("AbstractMonitorService", () => {
     });
 
     it("should initialize with custom configuration values", () => {
-      expect(monitorService.config.lagThreshold).toBe(100); // defaultConfig.maxLag gets mapped to lagThreshold internally
+      expect(monitorService.config.lagThreshold).toBe(100);
       expect(monitorService.config.enabledResourceLag).toBe(defaultConfig.enabledResourceLag);
       expect(monitorService.config.checkInterval).toBe(defaultConfig.checkInterval);
       expect(monitorService.config.rateLimitThreshold).toBe(defaultConfig.rateLimitThreshold);

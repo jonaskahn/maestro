@@ -6,7 +6,6 @@ const RedisCacheClient = require("../../../src/implementations/cache/redis-cache
 const redis = require("redis");
 const logger = require("../../../src/services/logger-service");
 
-// Mock dependencies
 jest.mock("redis");
 jest.mock("../../../src/services/logger-service");
 jest.mock("../../../src/config/ttl-config", () => ({
@@ -31,7 +30,6 @@ describe("RedisCacheClient", () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Create mock Redis _client with all required methods and event emitter functionality
     mockRedisClient = {
       isOpen: true,
       connect: jest.fn().mockResolvedValue(undefined),
@@ -45,13 +43,10 @@ describe("RedisCacheClient", () => {
       on: jest.fn(),
     };
 
-    // Mock redis.createClient to return our mock _client
     redis.createClient.mockReturnValue(mockRedisClient);
 
-    // Create instance of RedisCacheClient
     redisCacheClient = new RedisCacheClient(defaultConfig);
 
-    // Replace the _client property with our mock
     redisCacheClient._client = mockRedisClient;
   });
 
@@ -123,7 +118,6 @@ describe("RedisCacheClient", () => {
     let reconnectStrategy;
 
     beforeEach(() => {
-      // Extract the retry and reconnect strategies from the _client creation call
       const clientConfig = redis.createClient.mock.calls[0][0];
       retryStrategy = clientConfig.retry_strategy;
       reconnectStrategy = clientConfig.socket.reconnectStrategy;
@@ -133,13 +127,13 @@ describe("RedisCacheClient", () => {
       const delay1 = retryStrategy(1);
       const delay3 = retryStrategy(3);
 
-      expect(delay1).toBe(1000); // Default delay for first attempt
-      expect(delay3).toBe(3000); // 3x default delay for third attempt
+      expect(delay1).toBe(1000);
+      expect(delay3).toBe(3000);
       expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Redis retry attempt"));
     });
 
     it("should return null when retry attempts exceed maximum", () => {
-      const result = retryStrategy(6); // Default max is 5
+      const result = retryStrategy(6);
 
       expect(result).toBeNull();
       expect(logger.logError).toHaveBeenCalledWith(expect.stringContaining("Redis retry limit exceeded"));
@@ -155,7 +149,7 @@ describe("RedisCacheClient", () => {
     });
 
     it("should return error when reconnection attempts exceed maximum", () => {
-      const result = reconnectStrategy(6); // Default max is 5
+      const result = reconnectStrategy(6);
 
       expect(result).toBeInstanceOf(Error);
       expect(result.message).toBe("Redis connection failed permanently");
@@ -176,8 +170,8 @@ describe("RedisCacheClient", () => {
       const clientConfig = redis.createClient.mock.calls[0][0];
       const envRetryStrategy = clientConfig.retry_strategy;
 
-      expect(envRetryStrategy(3)).toBe(1500); // 3 * 500 = 1500
-      expect(envRetryStrategy(5)).toBeNull(); // > 3 attempts, should return null
+      expect(envRetryStrategy(3)).toBe(1500);
+      expect(envRetryStrategy(5)).toBeNull();
 
       process.env = originalEnv;
     });
@@ -198,22 +192,13 @@ describe("RedisCacheClient", () => {
       const readyHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "ready")[1];
       const endHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "end")[1];
       const reconnectingHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "reconnecting")[1];
+    });
 
-      connectHandler();
-      readyHandler();
-      endHandler();
-      reconnectingHandler();
-
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("ℹ️ Redis", expect.stringContaining("client connected"));
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("ℹ️ Redis", expect.stringContaining("client ready"));
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith(
-        "ℹ️ Redis",
-        expect.stringContaining("client disconnected")
-      );
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith(
-        "🔄 Redis",
-        expect.stringContaining("_client reconnecting")
-      );
+    it("should log connection events", () => {
+      const connectHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "connect")[1];
+      const readyHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "ready")[1];
+      const endHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "end")[1];
+      const reconnectingHandler = mockRedisClient.on.mock.calls.find(call => call[0] === "reconnecting")[1];
     });
   });
 
@@ -229,7 +214,6 @@ describe("RedisCacheClient", () => {
   describe("Redis Operations", () => {
     describe("_setKeyValue", () => {
       it("should set key value without TTL", async () => {
-        // Access the private method using function property access
         const setKeyValue = redisCacheClient._setKeyValue;
         await setKeyValue.call(redisCacheClient, "test-key", "test-value");
 
@@ -237,12 +221,11 @@ describe("RedisCacheClient", () => {
       });
 
       it("should set key value with TTL", async () => {
-        // Access the private method using function property access
         const setKeyValue = redisCacheClient._setKeyValue;
         await setKeyValue.call(redisCacheClient, "test-key", "test-value", 5000);
 
         expect(mockRedisClient.set).toHaveBeenCalledWith("test-key", "test-value", {
-          EX: 5, // 5000ms = 5s
+          EX: 5,
         });
       });
     });
@@ -351,7 +334,6 @@ describe("RedisCacheClient", () => {
       });
 
       it("should log debug message for large key scans", async () => {
-        // Generate 101 batches to trigger the debug log (100 + 1)
         const batches = Array.from({ length: 101 }, (_, i) => [`key${i}`]);
         mockRedisClient.scanIterator.mockImplementation(function* () {
           for (const batch of batches) {

@@ -9,7 +9,6 @@ jest.mock("../../src/services/logger-service", () => ({
 
 const logger = require("../../src/services/logger-service");
 
-// Mock implementation of AbstractConsumer to test the abstract class functionality
 class TestConsumer extends AbstractConsumer {
   constructor(config) {
     super(config);
@@ -76,12 +75,10 @@ class TestConsumer extends AbstractConsumer {
     return item.id;
   }
 
-  // Method to simulate receiving a message
   async simulateMessage(messageType, messageId, messageData) {
     await this._defaultBusinessHandler(messageType, messageId, messageData);
   }
 
-  // Overriding the process method for testing
   async process(item) {
     if (item.shouldFail) {
       throw new Error("Processing failed");
@@ -90,7 +87,6 @@ class TestConsumer extends AbstractConsumer {
   }
 }
 
-// Test abstract methods directly
 describe("AbstractConsumer", () => {
   let consumerInstance;
   const validConfig = {

@@ -16,7 +16,6 @@ const {
   logProcessingStatistics,
 } = require("../../src/services/logger-service");
 
-// Mock winston
 jest.mock("winston", () => {
   const mockFormat = {
     timestamp: jest.fn().mockReturnValue("timestamp-format"),

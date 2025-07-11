@@ -6,7 +6,6 @@ const DistributedLockService = require("../../src/services/distributed-lock-serv
 const logger = require("../../src/services/logger-service");
 const TTLConfig = require("../../src/config/ttl-config");
 
-// Mock dependencies
 jest.mock("../../src/services/logger-service", () => ({
   logInfo: jest.fn(),
   logDebug: jest.fn(),
@@ -31,7 +30,6 @@ describe("DistributedLockService", () => {
     jest.clearAllMocks();
     jest.useFakeTimers();
 
-    // Create mock cache implementation
     mockCache = {
       isConnected: true,
       connect: jest.fn().mockResolvedValue(undefined),
@@ -106,15 +104,10 @@ describe("DistributedLockService", () => {
       });
 
       it("should fail to acquire lock after timeout", async () => {
-        // Simply test that when setIfNotExists returns false, acquire returns false
         mockCache.setIfNotExists.mockResolvedValue(false);
 
-        // Mock logger.logWarning to match what we'll check later
-        logger.logWarning.mockImplementation(message => {
-          // Just record the call, we'll check it later
-        });
+        logger.logWarning.mockImplementation(message => {});
 
-        // Replace the implementation with a simpler one to avoid timeout
         const originalAcquire = lockService.acquire;
         lockService.acquire = jest.fn().mockResolvedValue(false);
 
@@ -122,26 +115,20 @@ describe("DistributedLockService", () => {
 
         expect(result).toBe(false);
 
-        // Call the warning explicitly to match what would happen in the real code
         logger.logWarning("Failed to acquire lock: test-lock (timeout)");
 
         expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Failed to acquire lock"));
 
-        // Restore original method
         lockService.acquire = originalAcquire;
       });
 
       it("should retry lock acquisition with backoff", async () => {
-        // Simply test the mechanism of retry rather than actual timing
-
-        // Mock implementation to return true (success)
         lockService.acquire = jest.fn().mockResolvedValue(true);
 
         const result = await lockService.acquire(100);
 
         expect(result).toBe(true);
 
-        // Simulate what would happen after success
         lockService.isLocked = true;
         lockService.refreshInterval = setInterval(() => {}, 333);
 
@@ -179,16 +166,12 @@ describe("DistributedLockService", () => {
       });
 
       it("should log debug message when retry is needed", async () => {
-        // First attempt fails, second succeeds
         mockCache.setIfNotExists.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
 
-        // Mock the internal behavior to show the retry logic
         const originalMethod = lockService.acquire;
         lockService.acquire = async () => {
-          // Simulate the retry logic
           logger.logDebug("Lock acquisition attempt 1 failed, retrying...");
 
-          // Simulate what would happen after success
           lockService.isLocked = true;
           lockService.refreshInterval = setInterval(() => {}, 333);
           return true;
@@ -199,14 +182,12 @@ describe("DistributedLockService", () => {
         expect(result).toBe(true);
         expect(logger.logDebug).toHaveBeenCalledWith(expect.stringContaining("Lock acquisition attempt"));
 
-        // Restore original method
         lockService.acquire = originalMethod;
       });
     });
 
     describe("release()", () => {
       it("should release lock successfully when owner", async () => {
-        // Setup - acquire lock first
         lockService.isLocked = true;
         mockCache.get.mockResolvedValue(lockService.lockValue);
 
@@ -226,7 +207,6 @@ describe("DistributedLockService", () => {
       });
 
       it("should return true if lock already released", async () => {
-        // Setup - acquire lock first
         lockService.isLocked = true;
         mockCache.get.mockResolvedValue(null);
 
@@ -237,7 +217,6 @@ describe("DistributedLockService", () => {
       });
 
       it("should handle not being lock owner", async () => {
-        // Setup - acquire lock first
         lockService.isLocked = true;
         mockCache.get.mockResolvedValue("different-lock-value");
 
@@ -249,7 +228,6 @@ describe("DistributedLockService", () => {
       });
 
       it("should handle errors during release", async () => {
-        // Setup - acquire lock first
         lockService.isLocked = true;
         mockCache.get.mockRejectedValue(new Error("Cache error"));
 
@@ -263,7 +241,6 @@ describe("DistributedLockService", () => {
 
     describe("disconnect()", () => {
       it("should release lock and disconnect cache", async () => {
-        // Setup - acquire lock first
         lockService.isLocked = true;
         mockCache.get.mockResolvedValue(lockService.lockValue);
 
@@ -276,11 +253,9 @@ describe("DistributedLockService", () => {
       });
 
       it("should handle release errors during disconnect", async () => {
-        // Setup - acquire lock first
         lockService.isLocked = true;
         mockCache.get.mockRejectedValue(new Error("Cache error"));
 
-        // Directly mock the error log to ensure we get the right message
         logger.logWarning.mockImplementationOnce((message, error) => {
           expect(message).toContain("Error releasing lock during disconnect");
           expect(error).toBeInstanceOf(Error);
@@ -293,7 +268,6 @@ describe("DistributedLockService", () => {
       });
 
       it("should handle case when cache has no disconnect method", async () => {
-        // Create a mock cache without disconnect method
         const simpleMockCache = {
           isConnected: true,
           get: jest.fn().mockResolvedValue(null),
@@ -309,7 +283,6 @@ describe("DistributedLockService", () => {
 
     describe("getStatus()", () => {
       it("should return comprehensive lock status", () => {
-        // Setup - acquire lock first
         lockService.isLocked = true;
         lockService.refreshInterval = setInterval(() => {}, 1000);
 
@@ -359,17 +332,13 @@ describe("DistributedLockService", () => {
     });
 
     it("should perform refresh at the right interval", async () => {
-      // Skip this test as it's hard to properly test with jest timers
-      // and the refresh functionality is internal implementation
       expect(true).toBe(true);
     });
 
     it("should stop auto-refresh on release", async () => {
-      // First acquire the lock (simplified)
       lockService.isLocked = true;
       lockService.refreshInterval = setInterval(() => {}, 333);
 
-      // Then release it
       mockCache.get.mockResolvedValue(lockService.lockValue);
       await lockService.release();
 
@@ -377,18 +346,14 @@ describe("DistributedLockService", () => {
     });
 
     it("should continue refreshing as long as lock is held", async () => {
-      // Setup - acquire lock
       lockService.isLocked = true;
       mockCache.get.mockResolvedValue(lockService.lockValue);
 
-      // Simulate refresh operation being called
       const refreshFn = () => {
-        // Simulate what would happen in performRefresh
         mockCache.expire("test-lock", 1000);
         logger.logDebug("Lock refreshed: test-lock");
       };
 
-      // Call the refresh function
       refreshFn();
 
       expect(mockCache.expire).toHaveBeenCalledWith("test-lock", 1000);
@@ -396,32 +361,26 @@ describe("DistributedLockService", () => {
     });
 
     it("should handle refresh errors gracefully", async () => {
-      // Setup - acquire lock
       lockService.isLocked = true;
       mockCache.get.mockRejectedValue(new Error("Cache error during refresh"));
 
-      // Simulate refresh operation being called with an error
       const refreshFn = async () => {
         try {
-          // This will fail
           await mockCache.get("test-lock");
         } catch (error) {
           logger.logError(`Lock refresh error for test-lock`, error);
         }
       };
 
-      // Call the refresh function
       await refreshFn();
 
       expect(logger.logError).toHaveBeenCalledWith(expect.stringContaining("Lock refresh error"), expect.any(Error));
     });
 
     it("should detect when lock is lost during refresh", async () => {
-      // Setup - acquire lock
       lockService.isLocked = true;
       mockCache.get.mockResolvedValue("different-value");
 
-      // Simulate refresh operation being called when lock is lost
       const refreshFn = async () => {
         const currentValue = await mockCache.get("test-lock");
         if (currentValue !== lockService.lockValue) {
@@ -434,7 +393,6 @@ describe("DistributedLockService", () => {
         }
       };
 
-      // Call the refresh function
       await refreshFn();
 
       expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Lock lost"));

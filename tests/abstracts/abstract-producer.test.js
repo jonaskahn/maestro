@@ -19,11 +19,9 @@ jest.mock("../../src/services/distributed-lock-service", () => {
   }));
 });
 
-// Mock process.exit to prevent actual exit during tests
 const realProcessExit = process.exit;
 process.exit = jest.fn();
 
-// Restore original process.exit after all tests
 afterAll(() => {
   process.exit = realProcessExit;
 });
@@ -31,7 +29,6 @@ afterAll(() => {
 const logger = require("../../src/services/logger-service");
 const DistributedLockService = require("../../src/services/distributed-lock-service");
 
-// Mock implementation of AbstractProducer to test the abstract class functionality
 class TestProducer extends AbstractProducer {
   constructor(config) {
     super(config);
@@ -107,7 +104,7 @@ class TestProducer extends AbstractProducer {
 
     if (criteria.specificIds) {
       return criteria.specificIds
-        .filter(id => !excludedIds.includes(id)) // Apply filter directly here
+        .filter(id => !excludedIds.includes(id))
         .map(id => ({
           id,
           data: `data-for-${id}`,
@@ -151,7 +148,6 @@ class TestProducer extends AbstractProducer {
     return { messageCount: messages.length };
   }
 
-  // For testing purposes, let's add a way to set the shutting down flag
   setShuttingDown(value) {
     this.isShuttingDown = value;
   }
