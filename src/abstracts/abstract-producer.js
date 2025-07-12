@@ -208,7 +208,7 @@ class AbstractProducer {
    */
   _logConfigurationLoaded() {
     logger.logDebug(
-      `🐞${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
+      `${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
     );
   }
 
@@ -222,7 +222,7 @@ class AbstractProducer {
     }
 
     await this._cacheLayer.connect();
-    logger.logInfo(`🔌 ${this.getBrokerType().toUpperCase()} producer connected to cache layer`);
+    logger.logInfo(`${this.getBrokerType().toUpperCase()} producer connected to cache layer`);
   }
 
   async #connectToMonitorServiceIfAvailable() {
@@ -230,7 +230,7 @@ class AbstractProducer {
       return;
     }
     await this._monitorService.connect();
-    logger.logInfo(`ℹ️ ${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`);
+    logger.logInfo(`${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`);
   }
 
   /**
@@ -373,7 +373,7 @@ class AbstractProducer {
       const status = await this._monitorService.getBackpressureStatus();
       const delay = status.recommendedDelay || 1000;
 
-      logger.logWarning(`‼️ Backpressure detected (${status.backpressureLevel}), pausing for ${delay}ms`, {
+      logger.logWarning(`Backpressure detected (${status.backpressureLevel}), pausing for ${delay}ms`, {
         topic: this._topic,
         brokerType: this.getBrokerType(),
         metrics: status.metrics,
@@ -385,14 +385,11 @@ class AbstractProducer {
 
       if (stillInBackpressure) {
         const newStatus = await this._monitorService.getBackpressureStatus();
-        logger.logWarning(
-          `‼️ System still under backpressure (${newStatus.backpressureLevel}) after waiting ${delay}ms`,
-          {
-            topic: this._topic,
-            brokerType: this.getBrokerType(),
-            metrics: newStatus.metrics,
-          }
-        );
+        logger.logWarning(`System still under backpressure (${newStatus.backpressureLevel}) after waiting ${delay}ms`, {
+          topic: this._topic,
+          brokerType: this.getBrokerType(),
+          metrics: newStatus.metrics,
+        });
         return true;
       } else {
         return false;
@@ -667,7 +664,7 @@ class AbstractProducer {
       try {
         return await this.#sendItemToBrokerWithoutLock(items, options);
       } catch (e) {
-        logger.logWarning("⚠️ Producer failed to send message to Broker", e);
+        logger.logWarning("Producer failed to send message to Broker", e);
         return {
           success: false,
           sent: 0,
@@ -775,7 +772,7 @@ class AbstractProducer {
       if (await this._topicExisted) {
         const isPressure = await this.#isMessageBrokerUnderPressure();
         if (isPressure) {
-          logger.logWarning("☢️ System is under pressure, stop sending new items");
+          logger.logWarning("System is under pressure, stop sending new items");
           return successResult;
         }
         const excludedIds = await this.#getExcludedIds();

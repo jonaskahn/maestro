@@ -74,12 +74,12 @@ class RedisCacheClient extends AbstractCache {
 
     return attemptNumber => {
       if (attemptNumber > maxRetryAttempts) {
-        logger.logError(`❌ Redis retry limit exceeded (${attemptNumber} attempts)`);
+        logger.logError(`Redis retry limit exceeded (${attemptNumber} attempts)`);
         return null;
       }
 
       const delayMs = Math.min(attemptNumber * retryDelayMs, maxDelayMs);
-      logger.logInfo(`📡 Redis retry attempt ${attemptNumber} in ${delayMs}ms`);
+      logger.logInfo(`Redis retry attempt ${attemptNumber} in ${delayMs}ms`);
       return delayMs;
     };
   }
@@ -95,12 +95,12 @@ class RedisCacheClient extends AbstractCache {
 
     return retryAttemptNumber => {
       if (retryAttemptNumber > maxRetryAttempts) {
-        logger.logError(`❌ Redis reconnection limit exceeded (${retryAttemptNumber} attempts)`);
+        logger.logError(`Redis reconnection limit exceeded (${retryAttemptNumber} attempts)`);
         return new Error("Redis connection failed permanently");
       }
 
       const delayMs = Math.min(retryAttemptNumber * retryDelayMs, maxDelayMs);
-      logger.logInfo(`🔄 Redis reconnecting in ${delayMs}ms (attempt ${retryAttemptNumber})`);
+      logger.logInfo(`Redis reconnecting in ${delayMs}ms (attempt ${retryAttemptNumber})`);
       return delayMs;
     };
   }
@@ -111,23 +111,23 @@ class RedisCacheClient extends AbstractCache {
    */
   #attachEventHandlers(client) {
     client.on("error", error => {
-      logger.logError("❌ Redis client error", error);
+      logger.logError("Redis client error occurred", error);
     });
 
     client.on("connect", () => {
-      logger.logConnectionEvent("ℹ️ Redis", "client connected");
+      logger.logConnectionEvent("Redis", "client connected successfully");
     });
 
     client.on("ready", () => {
-      logger.logConnectionEvent("ℹ️ Redis", "client ready");
+      logger.logConnectionEvent("Redis", "client ready for operations");
     });
 
     client.on("end", () => {
-      logger.logConnectionEvent("ℹ️ Redis", "client disconnected");
+      logger.logConnectionEvent("Redis", "client disconnected from server");
     });
 
     client.on("reconnecting", () => {
-      logger.logConnectionEvent("🔄 Redis", "_client reconnecting");
+      logger.logConnectionEvent("Redis", "client reconnecting to server");
     });
   }
 
@@ -232,12 +232,12 @@ class RedisCacheClient extends AbstractCache {
         sentKeys.push(...keys);
         scanCount++;
         if (scanCount % 100 === 0) {
-          logger.logDebug(`📈 Found ${scanCount} keys so far...`);
+          logger.logDebug(`Found ${scanCount} keys in Redis scan operation`);
         }
       }
       return sentKeys;
     } catch (error) {
-      logger.logError(`❌ Error scanning Redis keys with pattern '${pattern}':`, error);
+      logger.logError(`Error scanning Redis keys with pattern '${pattern}'`, error);
       throw error;
     }
   }

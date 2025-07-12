@@ -90,8 +90,8 @@ class AbstractMonitorService {
     this.isMonitoring = MONITORING_STATES.DISABLED;
     this.monitoringInterval = null;
 
-    logger.logInfo(`ℹ️ Backpressure monitor configured for ${this.getBrokerType()}`);
-    logger.logDebug("ℹ️ Backpressure monitor configuration", {
+    logger.logInfo(`Backpressure monitor configured for ${this.getBrokerType()}`);
+    logger.logDebug("Backpressure monitor configuration", {
       lagThreshold: this.config.lagThreshold,
       checkInterval: this.config.lagMonitorInterval,
       rateLimitThreshold: this.config.rateLimitThreshold,
@@ -156,7 +156,7 @@ class AbstractMonitorService {
       }, this.config.checkInterval);
 
       this.isMonitoring = MONITORING_STATES.ENABLED;
-      logger.logInfo(`⚡ Backpressure monitoring started for ${this.getBrokerType()}`);
+      logger.logInfo(`Backpressure monitoring started for ${this.getBrokerType()}`);
       return Promise.resolve();
     } catch (error) {
       logger.logError(`Failed to start backpressure monitoring for ${this.getBrokerType()}`, error);
@@ -178,7 +178,7 @@ class AbstractMonitorService {
 
       if (backpressureLevel !== BACKPRESSURE_LEVELS.NONE) {
         logger.logWarning(
-          `⚡ Backpressure detected (${backpressureLevel}): lag=${metrics.totalLag}, ` +
+          `Backpressure detected (${backpressureLevel}): lag=${metrics.totalLag}, ` +
             `memory=${metrics.memoryUsage}%, cpu=${metrics.cpuUsage}%`
         );
       }
@@ -357,7 +357,7 @@ class AbstractMonitorService {
       this.lastMetricsTime = null;
       this.isMonitoring = MONITORING_STATES.DISABLED;
 
-      logger.logInfo(`⚡ Backpressure monitoring stopped for ${this.getBrokerType()}`);
+      logger.logInfo(`Backpressure monitoring stopped for ${this.getBrokerType()}`);
     } catch (error) {
       logger.logError(`Error stopping backpressure monitoring for ${this.getBrokerType()}`, error);
       throw error;

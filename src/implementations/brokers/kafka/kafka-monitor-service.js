@@ -47,7 +47,7 @@ class KafkaMonitorService extends AbstractMonitorService {
    */
   async getConsumerLag() {
     try {
-      logger.logDebug(`✨ Start monitoring current consumer for topic ${this._topic} lag`);
+      logger.logDebug(`Start monitoring current consumer for topic ${this._topic} lag`);
       const totalLag = await this._fetchCurrentLag();
 
       return {
@@ -57,10 +57,10 @@ class KafkaMonitorService extends AbstractMonitorService {
         lagThreshold: this.config.lagThreshold,
       };
     } catch (error) {
-      logger.logError(`‼️ Failed monitoring current consumer for topic ${this._topic} lag:`, error);
+      logger.logError(`Failed monitoring current consumer for topic ${this._topic} lag:`, error);
       throw error;
     } finally {
-      logger.logDebug(`☑️ Finish monitoring current consumer for topic ${this._topic} lag`);
+      logger.logDebug(`Finish monitoring current consumer for topic ${this._topic} lag`);
     }
   }
 

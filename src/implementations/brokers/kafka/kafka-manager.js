@@ -121,7 +121,7 @@ class KafkaManager {
     }
     const client = new Kafka(clientOptions);
     logger.logDebug(
-      `📡 Kafka client created: ${clientOptions.clientId || "unknown"} connecting to ${clientOptions.brokers.join(", ")}`
+      ` Kafka client created: ${clientOptions.clientId || "unknown"} connecting to ${clientOptions.brokers.join(", ")}`
     );
     return client;
   }
@@ -134,7 +134,7 @@ class KafkaManager {
    */
   static createAdmin(client, clientOptions) {
     if (!client && !clientOptions) {
-      throw new Error(`‼️ Can not create admin due no client or clientOptions defined yet.`);
+      throw new Error(`Can not create admin due no client or clientOptions defined yet.`);
     }
     const kafkaClient = client ?? this.createClient(clientOptions);
     return kafkaClient.admin();
@@ -149,7 +149,7 @@ class KafkaManager {
    */
   static createProducer(client, clientOptions, producerOptions) {
     if (!client && !clientOptions) {
-      throw new Error(`‼️ Can not create producer due no client or clientOptions defined yet.`);
+      throw new Error(`Can not create producer due no client or clientOptions defined yet.`);
     }
     const kafkaClient = client ?? KafkaManager.createClient(clientOptions);
     return kafkaClient.producer(producerOptions);
@@ -164,7 +164,7 @@ class KafkaManager {
    */
   static createConsumer(client, clientOptions, consumerOptions) {
     if (!client && !clientOptions) {
-      throw new Error(`‼️ Can not create consumer due no client or clientOptions defined yet.`);
+      throw new Error(`Can not create consumer due no client or clientOptions defined yet.`);
     }
     const kafkaClient = client ?? KafkaManager.createClient(clientOptions);
     return kafkaClient.consumer(consumerOptions);
@@ -356,10 +356,10 @@ class KafkaManager {
     }
     try {
       const result = JSON.parse(messageValue.toString());
-      logger.logDebug("☑️ Success parse message content from Kafka Broker");
+      logger.logDebug("Success parse message content from Kafka Broker");
       return result;
     } catch (error) {
-      logger.logWarning("⚠️ Failed to message content from Kafka Broker", error.message);
+      logger.logWarning("Failed to parse message content from Kafka Broker", error.message);
       return messageValue.toString();
     }
   }
@@ -430,7 +430,7 @@ class KafkaManager {
         totalLag += partitionLag;
       }
 
-      logger.logDebug(`📊 Consumer lag for group '${consumerGroup}' on topic '${topic}': ${totalLag}`);
+      logger.logDebug(`Consumer lag for group '${consumerGroup}' on topic '${topic}': ${totalLag}`);
 
       return totalLag;
     } catch (error) {

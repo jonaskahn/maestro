@@ -28,6 +28,44 @@ const LOG_FORMATS = {
 };
 
 /**
+ * Log categories with standardized icons
+ */
+const LOG_CATEGORIES = {
+  CONNECTION: {
+    CONNECT: "",
+    DISCONNECT: "",
+    RECONNECT: "",
+    READY: "",
+  },
+  OPERATION: {
+    START: "▶️",
+    STOP: "⏹️",
+    PROCESSING: "⚙️",
+    COMPLETE: "✓",
+    BATCH: "📦",
+    TASK: "📋",
+  },
+  STATUS: {
+    INFO: "ℹ️",
+    SUCCESS: "✅",
+    WARNING: "⚠️",
+    ERROR: "❌",
+    DEBUG: "⚒️",
+  },
+  DATA: {
+    CREATED: "📝",
+    UPDATED: "✏️",
+    DELETED: "🗑️",
+    READ: "📖",
+  },
+  PERFORMANCE: {
+    STATS: "📊",
+    CONCURRENCY: "⚖️",
+    TIMEOUT: "⏱️",
+  },
+};
+
+/**
  * Logger Service Class
  *
  * Provides standardized logging functionality with configurable formats and levels.
@@ -49,7 +87,7 @@ class LoggerService {
    * @param {Object} metadata - Additional context data
    */
   logInfo(message, metadata = {}) {
-    this.logger.info(message, metadata);
+    this.logger.info(`${LOG_CATEGORIES.STATUS.INFO} ${message}`, metadata);
   }
 
   /**
@@ -58,7 +96,7 @@ class LoggerService {
    * @param {Object} metadata - Additional context data
    */
   logDebug(message, metadata = {}) {
-    this.logger.debug(message, metadata);
+    this.logger.debug(`${LOG_CATEGORIES.STATUS.DEBUG} ${message}`, metadata);
   }
 
   /**
@@ -67,7 +105,7 @@ class LoggerService {
    * @param {Object} metadata - Additional context data
    */
   logWarning(message, metadata = {}) {
-    this.logger.warn(message, metadata);
+    this.logger.warn(`${LOG_CATEGORIES.STATUS.WARNING} ${message}`, metadata);
   }
 
   /**
@@ -84,7 +122,7 @@ class LoggerService {
         }
       : {};
 
-    this.logger.error(message, { ...errorInfo, ...metadata });
+    this.logger.error(`${LOG_CATEGORIES.STATUS.ERROR} ${message}`, { ...errorInfo, ...metadata });
   }
 
   /**
@@ -94,7 +132,7 @@ class LoggerService {
    * @param {Object} details - Operation-specific details
    */
   logBatchOperation(batchId, operation, details = {}) {
-    this.logInfo(`[Batch ${batchId}] ${operation}`, details);
+    this.logInfo(`${LOG_CATEGORIES.OPERATION.BATCH} [Batch ${batchId}] ${operation}`, details);
   }
 
   /**
@@ -104,7 +142,7 @@ class LoggerService {
    * @param {Object} details - Task-specific details
    */
   logTaskOperation(taskId, operation, details = {}) {
-    this.logInfo(`[${taskId}] ${operation}`, details);
+    this.logInfo(`${LOG_CATEGORIES.OPERATION.TASK} [${taskId}] ${operation}`, details);
   }
 
   /**
@@ -114,7 +152,19 @@ class LoggerService {
    * @param {Object} details - Connection-specific details
    */
   logConnectionEvent(service, event, details = {}) {
-    this.logInfo(`${service} ${event}`, details);
+    let icon = LOG_CATEGORIES.STATUS.INFO;
+
+    if (event.includes("connect")) {
+      icon = LOG_CATEGORIES.CONNECTION.CONNECT;
+    } else if (event.includes("disconnect")) {
+      icon = LOG_CATEGORIES.CONNECTION.DISCONNECT;
+    } else if (event.includes("reconnect")) {
+      icon = LOG_CATEGORIES.CONNECTION.RECONNECT;
+    } else if (event.includes("ready")) {
+      icon = LOG_CATEGORIES.CONNECTION.READY;
+    }
+
+    this.logInfo(`${icon} ${service}: ${event}`, details);
   }
 
   /**
@@ -125,7 +175,10 @@ class LoggerService {
    * @param {Object} additionalInfo - Additional concurrency metrics
    */
   logConcurrencyStatus(active, max, queued, additionalInfo = {}) {
-    this.logInfo(`Concurrency Status: ${active}/${max} active, ${queued} queued`, additionalInfo);
+    this.logInfo(
+      `${LOG_CATEGORIES.PERFORMANCE.CONCURRENCY} Concurrency Status: ${active}/${max} active, ${queued} queued`,
+      additionalInfo
+    );
   }
 
   /**
@@ -133,7 +186,7 @@ class LoggerService {
    * @param {Object} statistics - Processing statistics object
    */
   logProcessingStatistics(statistics) {
-    this.logInfo("Processing Statistics", statistics);
+    this.logInfo(`${LOG_CATEGORIES.PERFORMANCE.STATS} Processing Statistics`, statistics);
   }
 
   /**
@@ -201,7 +254,7 @@ class LoggerService {
         winston.format.colorize(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
           const metaString = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
-          return `${timestamp} [${level}]: ${message}${metaString}`;
+          return `${timestamp} [${level}] ${message}${metaString}`;
         })
       ),
       [LOG_FORMATS.JSON]: winston.format.combine(timestamp, winston.format.json()),
@@ -212,7 +265,7 @@ class LoggerService {
         winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
           const metaString = Object.keys(meta).length ? `\nMeta: ${JSON.stringify(meta, null, 2)}` : "";
           const stackString = stack ? `\nStack: ${stack}` : "";
-          return `${timestamp} [${level}]: ${message}${metaString}${stackString}`;
+          return `${timestamp} [${level}] ${message}${metaString}${stackString}`;
         })
       ),
     };
@@ -234,7 +287,6 @@ class LoggerService {
   }
 }
 
-// Create singleton instance
 const loggerInstance = new LoggerService();
 
 /**
@@ -253,6 +305,7 @@ module.exports = {
   logProcessingStatistics: loggerInstance.logProcessingStatistics.bind(loggerInstance),
   isDebugEnabled: loggerInstance.isDebugEnabled.bind(loggerInstance),
   isLevelEnabled: loggerInstance.isLevelEnabled.bind(loggerInstance),
+  LOG_CATEGORIES,
   LoggerService,
   default: LoggerService,
 };

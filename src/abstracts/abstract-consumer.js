@@ -160,7 +160,7 @@ class AbstractConsumer {
    * @returns {Object|null} Cache layer instance or null if disabled
    */
   _createCacheLayer(_config) {
-    logger.logDebug("⁉️Cache layer is disabled");
+    logger.logDebug("Cache layer is disabled");
     return null;
   }
 
@@ -325,7 +325,7 @@ class AbstractConsumer {
    */
   _logConfigurationLoaded() {
     logger.logDebug(
-      `🐞 ${this.getBrokerType()?.toUpperCase()} Consumer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
+      `${this.getBrokerType()?.toUpperCase()} Consumer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
     );
   }
 
@@ -340,7 +340,7 @@ class AbstractConsumer {
 
     try {
       await this._cacheLayer.connect();
-      logger.logInfo(`🔌 ${this.getBrokerType()?.toUpperCase()} consumer connected to cache layer`);
+      logger.logInfo(`${this.getBrokerType()?.toUpperCase()} consumer connected to cache layer`);
     } catch (error) {
       logger.logWarning("Failed to connect to cache layer, continuing without cache", error);
     }

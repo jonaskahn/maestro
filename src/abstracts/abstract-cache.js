@@ -90,7 +90,7 @@ class AbstractCache {
       retryOptions: config.retryOptions || {},
     };
 
-    logger.logDebug("ℹ️ Cache configuration", {
+    logger.logDebug("Cache configuration", {
       implementation: this.implementation,
       processingTtl: this.config.processingTtl,
       suppressionTtl: this.config.suppressionTtl,

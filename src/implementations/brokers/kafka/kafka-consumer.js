@@ -68,7 +68,7 @@ class KafkaConsumer extends AbstractConsumer {
    */
   _createCacheLayer(cacheOptions) {
     if (!cacheOptions) {
-      logger.logWarning("⁉️Cache layer is disabled, _config is not yet defined");
+      logger.logWarning("Cache layer is disabled, _config is not yet defined");
       return null;
     }
     return CacheClientFactory.createClient(cacheOptions);
@@ -102,7 +102,7 @@ class KafkaConsumer extends AbstractConsumer {
   async _connectToMessageBroker() {
     await this._consumer.connect();
     await this._admin.connect();
-    logger.logConnectionEvent("🔌 Kafka Consumer", "connected to Kafka broker");
+    logger.logConnectionEvent("Kafka Consumer", "connected to Kafka broker");
   }
 
   /**
@@ -156,7 +156,7 @@ class KafkaConsumer extends AbstractConsumer {
             standardizeMessage.item
           );
           if (this._consumerOptions.autoCommit) {
-            logger.logDebug(`🔄 Auto-committed message offset ${message.offset}`);
+            logger.logDebug(`Auto-committed message offset ${message.offset}`);
           } else {
             if (!standardizeMessage.committed) {
               await this._consumer.commitOffsets([
@@ -167,11 +167,11 @@ class KafkaConsumer extends AbstractConsumer {
                 },
               ]);
               standardizeMessage.committed = true;
-              logger.logDebug(`☑️ Manually committed message offset ${message.offset} on partition ${partition}`);
+              logger.logDebug(`Manually committed message offset ${message.offset} on partition ${partition}`);
             }
           }
         } catch (error) {
-          logger.logError(`❌ Error processing Kafka message from ${topic}:${partition}:${message.offset}`, error);
+          logger.logError(`Error processing Kafka message from ${topic}:${partition}:${message.offset}`, error);
           if (!this._consumerOptions.autoCommit) {
             try {
               await this._consumer.commitOffsets([
@@ -181,16 +181,16 @@ class KafkaConsumer extends AbstractConsumer {
                   offset: (parseInt(message.offset) + 1).toString(),
                 },
               ]);
-              logger.logWarning(`⚠️ Committed failed message offset ${message.offset} to prevent reprocessing`);
+              logger.logWarning(`Committed failed message offset ${message.offset} to prevent reprocessing`);
             } catch (commitError) {
-              logger.logError(`❌ Failed to commit offset after error`, commitError);
+              logger.logError(`Failed to commit offset after error`, commitError);
             }
           }
         }
       },
     });
 
-    logger.logInfo(`📨 Kafka consumer started for topic '${this._topic}' in group '${this._groupId}'`);
+    logger.logInfo(`Kafka consumer started for topic '${this._topic}' in group '${this._groupId}'`);
   }
 
   /**
@@ -209,7 +209,7 @@ class KafkaConsumer extends AbstractConsumer {
    * @private
    */
   #extractBrokerMessage(kafkaMessage) {
-    logger.logDebug(`ℹ️ KafkaConsumer start to unwrap received message`);
+    logger.logDebug(`KafkaConsumer starting to unwrap received message`);
     const { topic, partition, message } = kafkaMessage;
     const messageId = KafkaManager.createMessageId(topic, partition, message?.offset);
     const content = KafkaManager.parseMessageValue(message?.value);
@@ -219,7 +219,7 @@ class KafkaConsumer extends AbstractConsumer {
       item: content,
       committed: false,
     };
-    logger.logDebug(`ℹ️ KafkaConsumer unwrap a message offset ${standardizeMessage.messageId}`);
+    logger.logDebug(`KafkaConsumer unwrapped message with ID ${standardizeMessage.messageId}`);
     return standardizeMessage;
   }
 
@@ -229,7 +229,7 @@ class KafkaConsumer extends AbstractConsumer {
    */
   async _stopConsumingFromBroker() {
     await this._consumer?.stop();
-    logger.logInfo(`⏹️ Kafka consumer stopped for topic '${this._topic}'`);
+    logger.logInfo(`Kafka consumer stopped for topic '${this._topic}'`);
   }
 
   /**
