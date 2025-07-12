@@ -3,8 +3,10 @@
   "version": "0.1.0",
   "description": "Job orchestration made simple for Node.js message workflows",
   "main": "src/index.js",
+  "types": "dist/index.d.ts",
   "files": [
     "src/**/*",
+    "dist/**/*",
     "README.md",
     "LICENSE"
   ],
@@ -17,6 +19,8 @@
     "format:check": "prettier --check .",
     "code:check": "npm run lint && npm run format:check",
     "code:fix": "npm run lint:fix && npm run format",
+    "build": "tsc",
+    "build:watch": "tsc --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:coverage": "jest --coverage",
@@ -49,7 +53,7 @@
     "email": "me@ifelse.one",
     "url": "https://github.com/jonaskahn"
   },
-  "license": "Apache-2.0",
+  "license": "MIT License",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jonaskahn/maestro.git"
@@ -102,11 +106,16 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.30.1",
+    "@types/node": "^24.0.13",
+    "@typescript-eslint/eslint-plugin": "^8.36.0",
+    "@typescript-eslint/parser": "^8.36.0",
     "eslint": "^9.30.1",
     "eslint-config-prettier": "^10.1.5",
     "jest": "^30.0.4",
     "jest-environment-node": "^30.0.4",
     "nodemon": "^3.1.10",
-    "prettier": "^3.6.2"
+    "prettier": "^3.6.2",
+    "ts-jest": "^29.4.0",
+    "typescript": "^5.8.3"
   }
 }

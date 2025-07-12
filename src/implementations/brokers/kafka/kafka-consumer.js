@@ -37,18 +37,35 @@ class KafkaConsumer extends AbstractConsumer {
    *
    * @param {Object} config - Configuration object
    * @param {string} config.topic - Topic to consume from
-   * @param {string} config.groupId - Consumer group ID for coordinated consumption
+   * @param {string} [config.groupId] - Consumer group ID for coordinated consumption (defaults to `${topic}-processors`)
    * @param {Object} [config.clientOptions] - Kafka client connection options
-   * @param {string} [config.clientOptions.brokers] - Comma-separated list of Kafka brokers
+   * @param {string|string[]} [config.clientOptions.brokers=['localhost:9092']] - List of Kafka brokers
+   * @param {string} [config.clientOptions.clientId] - Client ID (defaults to `${topic}-client-${timestamp}`)
    * @param {Object} [config.clientOptions.ssl] - SSL configuration options
    * @param {Object} [config.clientOptions.sasl] - SASL authentication options
+   * @param {number} [config.clientOptions.connectionTimeout] - Connection timeout from TTLConfig
+   * @param {number} [config.clientOptions.requestTimeout] - Request timeout from TTLConfig
+   * @param {boolean} [config.clientOptions.enforceRequestTimeout=true] - Whether to enforce request timeout
+   * @param {Object} [config.clientOptions.retry] - Retry options for client
    * @param {Object} [config.consumerOptions] - Kafka consumer specific options
-   * @param {boolean} [config.consumerOptions.fromBeginning=false] - Whether to consume from beginning of topic
+   * @param {boolean} [config.consumerOptions.fromBeginning=true] - Whether to consume from beginning of topic
    * @param {boolean} [config.consumerOptions.autoCommit=true] - Whether to auto-commit offsets
-   * @param {number} [config.consumerOptions.sessionTimeout] - Session timeout in ms
-   * @param {number} [config.consumerOptions.heartbeatInterval] - Heartbeat interval in ms
+   * @param {number} [config.consumerOptions.sessionTimeout] - Session timeout in ms (defaults to TASK_PROCESSING_STATE_TTL)
+   * @param {number} [config.consumerOptions.rebalanceTimeout] - Rebalance timeout in ms (defaults to TASK_PROCESSING_STATE_TTL * 5)
+   * @param {number} [config.consumerOptions.heartbeatInterval] - Heartbeat interval in ms (defaults to TASK_PROCESSING_STATE_TTL / 10)
+   * @param {number} [config.consumerOptions.maxBytesPerPartition=1048576] - Max bytes per partition
+   * @param {number} [config.consumerOptions.minBytes=1] - Min bytes to fetch
+   * @param {number} [config.consumerOptions.maxBytes=10485760] - Max bytes to fetch
+   * @param {number} [config.consumerOptions.maxWaitTimeInMs] - Max wait time in ms (defaults to connectionTimeout * 5)
+   * @param {number} [config.consumerOptions.maxInFlightRequests=null] - Max in flight requests
    * @param {Object} [config.topicOptions] - Topic configuration options
-   * @param {boolean} [config.topicOptions.allowAutoTopicCreation] - Whether to create topic if it doesn't exist
+   * @param {number} [config.topicOptions.partitions=5] - Number of partitions for topic
+   * @param {number} [config.topicOptions.replicationFactor=1] - Replication factor for topic
+   * @param {boolean} [config.topicOptions.allowAutoTopicCreation=true] - Whether to create topic if it doesn't exist
+   * @param {string} [config.topicOptions.keyPrefix] - Key prefix for cache (defaults to topic name uppercase)
+   * @param {number} [config.topicOptions.processingTtl=5000] - TTL for processing state in ms
+   * @param {number} [config.topicOptions.suppressionTtl] - TTL for suppression in ms (defaults to processingTtl * 5)
+   * @param {number} [config.maxConcurrency=1] - Max concurrent messages to process
    * @param {Object} [config.cacheOptions] - Cache configuration for deduplication
    */
   constructor(config) {

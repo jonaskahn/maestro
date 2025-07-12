@@ -46,9 +46,14 @@ class RedisCacheClient extends AbstractCache {
    */
   #createRedisClient() {
     const connectionOptions = this.config.connectionOptions || {};
-
+    let redisUrl = "redis://localhost:6379";
+    if (process.env.MO_REDIS_URL) {
+      redisUrl = `redis://${process.env.REDIS_URL.trim().replace("redis://")}`;
+    } else {
+      redisUrl = `redis://${process.env.MO_REDIS_HOST?.trim() || "127.0.0.1"}:${process.env.MO_REDIS_PORT || 6379}`;
+    }
     const clientConfig = {
-      url: connectionOptions.url || process.env.MO_REDIS_URL || "redis://localhost:6379",
+      url: connectionOptions.url || process.env.MO_REDIS_URL || redisUrl,
       password: connectionOptions.password || process.env.MO_REDIS_PASSWORD,
       retry_strategy: this.#createRetryStrategy(),
       socket: {

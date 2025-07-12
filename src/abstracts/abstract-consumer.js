@@ -572,6 +572,13 @@ class AbstractConsumer {
     throw new Error("process method must be implemented by user");
   }
 
+  async #afterProcessSuccess(itemId, messageKey, startTime) {
+    await this._onItemProcessSuccess(itemId);
+    this.metrics[METRICS_PROPERTIES.TOTAL_PROCESSED]++;
+    const duration = Date.now() - startTime;
+    logger.logInfo(`Successfully processed message: ${itemId} (key: ${messageKey}, duration: ${duration}ms)`);
+  }
+
   /**
    * Called when item processing is successful
    * Override to implement custom success handling
@@ -582,11 +589,19 @@ class AbstractConsumer {
     throw new Error("_markItemAsCompleted method must be implemented by subclass");
   }
 
-  async #afterProcessSuccess(itemId, messageKey, startTime) {
-    await this._onItemProcessSuccess(itemId);
-    this.metrics[METRICS_PROPERTIES.TOTAL_PROCESSED]++;
-    const duration = Date.now() - startTime;
-    logger.logInfo(`Successfully processed message: ${itemId} (key: ${messageKey}, duration: ${duration}ms)`);
+  async #handleProcessingFailure(itemId, messageKey, error) {
+    try {
+      await this._onItemProcessFailed(itemId, error);
+      this.metrics[METRICS_PROPERTIES.TOTAL_FAILED]++;
+      logger.logWarning(
+        `Failed to process message: ${itemId} (Key: ${messageKey}), but error will be ignored to throw`,
+        error
+      );
+    } catch (error) {
+      logger.logWarning(
+        `Failed to process failed message: ${itemId} (Key: ${messageKey}), but error will be ignored to throw [${error?.message}]`
+      );
+    }
   }
 
   /**
@@ -598,15 +613,6 @@ class AbstractConsumer {
    */
   async _onItemProcessFailed(_itemId, _error) {
     throw new Error("_onItemProcessFailed method must be implemented by subclass");
-  }
-
-  async #handleProcessingFailure(itemId, messageKey, error) {
-    await this._onItemProcessFailed(itemId, error);
-    this.metrics[METRICS_PROPERTIES.TOTAL_FAILED]++;
-    logger.logWarning(
-      `Failed to process message: ${itemId} (Key: ${messageKey}), but error will be ignored to throw`,
-      error
-    );
   }
 
   /**

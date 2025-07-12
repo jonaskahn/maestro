@@ -1,396 +1,226 @@
-# 🎭 Maestro
+# Maestro 🎭
 
-A powerful message queue abstraction framework providing unified interfaces for producers, consumers, and cache layers
-across different message brokers.
+[![npm version](https://img.shields.io/npm/v/@jonaskahn/maestro.svg?style=flat)](https://www.npmjs.com/package/@jonaskahn/maestro)
+[![license](https://img.shields.io/npm/l/@jonaskahn/maestro.svg)](https://github.com/jonaskahn/maestro/blob/main/LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/jonaskahn/maestro/pulls)
 
-## 📋 Overview
+> Job orchestration made simple for Node.js message workflows
 
-Maestro provides a clean abstraction over different message queue implementations, allowing you to write message
-processing code once and switch underlying infrastructure with minimal changes. It offers common patterns for producers,
-consumers, and caching while handling the complexities of each broker implementation.
+## Introduction
+
+Maestro is a lightweight, flexible library for orchestrating message-based workflows in Node.js applications. It provides abstractions and implementations for producers, consumers, monitoring, and caching to simplify working with message brokers like Kafka.
 
 ## Features
 
-- **🔄 Multi-broker support**: Write once, run anywhere with support for:
-    - Kafka (implemented)
-    - RabbitMQ (planned)
-    - BullMQ (planned)
+- 🔧 **Unified Abstractions** - Common interfaces for message brokers and caching
+- 🔄 **Message Processing** - Message suppression, concurrency control, and error handling
+- 💪 **Distributed Coordination** - Locks and synchronization across services
+- 📊 **Intelligent Monitoring** - Backpressure detection and adaptive rate limiting
+- 🛡️ **Reliability** - Graceful shutdown, connection management, and recovery
+- 🔍 **Observability** - Comprehensive logging and metrics collection
 
-- **📦 Caching layer abstractions**:
-    - Redis (implemented)
-    - Memcached (planned)
-    - In-memory cache (planned)
-
-- **🛠️ Advanced features**:
-    - Message suppression (cooldown period)
-    - Distributed locking
-    - Graceful shutdown handling
-    - Backpressure monitoring
-    - Message tracking and metrics
-    - Concurrency management
-    - Standardized error handling
-
-## 🏗️ Architecture
-
-Maestro is built on a solid foundation of abstract classes that define the core interfaces:
-
-- `AbstractProducer`: Base class for all message producers
-- `AbstractConsumer`: Base class for all message consumers
-- `AbstractCache`: Base class for all caching providers
-- `AbstractMonitorService`: Base class for backpressure monitoring services
-
-Concrete implementations extend these abstractions to provide broker-specific functionality while maintaining a
-consistent API.
-
-## 📊 Flow Diagrams
-
-### Overview Flow
-
-```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Your App      │     │    Maestro      │     │  Infrastructure │
-└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
-         │                       │                       │
-         ▼                       ▼                       ▼
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│                 │     │                 │     │                 │
-│  YourProducer   │────▶│  KafkaProducer  │────▶│  Kafka Broker   │
-│  YourConsumer   │◀───▶│  KafkaConsumer  │◀───▶│  Redis Cache    │
-│                 │     │                 │     │                 │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
-```
-
-### Producer Flow
-
-```
-┌──────────┐     ┌─────────────┐     ┌───────────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
-│          │     │             │     │               │     │           │     │           │     │           │
-│   Data   │────▶│ Check Cache │────▶│  Fetch Items  │────▶│  Create   │────▶│ Mark As   │────▶│   Send    │
-│  Source  │     │ Suppression │     │  (Excluding   │     │ Messages  │     │Suppressed │     │ to Broker │
-│          │     │ & Processing│     │ Suppressed ID)│     │           │     │           │     │           │
-└──────────┘     └─────────────┘     └───────────────┘     └───────────┘     └───────────┘     └───────────┘
-                       │
-                       │ Build exclusion list
-                       ▼
-                 ┌───────────────┐
-                 │               │
-                 │ Excluded IDs  │
-                 │ - Suppressed  │
-                 │ - Processing  │
-                 └───────────────┘
-```
-
-### Consumer Flow
-
-```
-┌───────────┐     ┌───────────┐     ┌───────────┐     ┌───────────┐
-│           │     │           │     │           │     │           │
-│  Message  │────▶│  Receive  │────▶│  Process  │────▶│  Update   │
-│  Broker   │     │ Messages  │     │ Business  │     │  State    │
-│           │     │           │     │  Logic    │     │           │
-└───────────┘     └───────────┘     └───────────┘     └───────────┘
-                       │                                    │
-                       │                                    │
-                       ▼                                    ▼
-                 ┌───────────┐                       ┌───────────┐
-                 │           │                       │           │
-                 │ Processed │                       │ Cache Key │
-                 │  Check    │                       │ Updates   │
-                 │           │                       │           │
-                 └───────────┘                       └───────────┘
-```
-
-### Detailed Producer Flow
-
-<details>
-<summary>Click to expand</summary>
-
-```
-┌───────┐     ┌────────────┐     ┌────────────┐     ┌────────────────┐     ┌──────────────┐
-│ START │────▶│ Connection │────▶│ Check      │────▶│ Is Under      │────▶│ Get          │
-│       │     │ Check      │     │ Backpressure│     │ Pressure?     │     │ Suppressed   │
-└───────┘     └────────────┘     └────────────┘     └────────────────┘     │ IDs          │
-                    │                                       │              └──────┬───────┘
-                    │                                       │ Yes                 │
-                    ▼                                       ▼                     ▼
-             ┌────────────┐                         ┌────────────────┐     ┌──────────────┐
-             │ Connect()  │                         │ Return Empty   │     │ Get          │
-             └──────┬─────┘                         │ Result         │     │ Processing   │
-                    │                               └────────────────┘     │ IDs          │
-                    └───────────────────────────────────────────────────▶ └──────┬───────┘
-                                                                                 │
-                                                                                 ▼
-┌────────────────┐     ┌────────────────┐     ┌────────────────┐           ┌──────────────┐
-│ Return Empty   │◀────│ Items Found?   │◀────│ getNextItems() │◀──────────│ Build        │
-│ Result         │     │                │     │ with excludedIds│           │ ExcludedIDs  │
-└────────────────┘     └────────┬───────┘     └────────────────┘           └──────────────┘
-       ▲                        │ Yes
-       │                        ▼
-       │              ┌────────────────┐     ┌────────────────┐     ┌────────────────┐
-       │              │ Acquire        │────▶│ Lock Acquired? │────▶│ Mark Items     │
-       │              │ Distributed    │     │                │     │ as Suppressed  │
-       │              │ Lock           │     └────────┬───────┘     └───────┬────────┘
-       │              └────────────────┘              │ No                  │
-       │                      ▲                       ▼                     ▼
-       │                      │             ┌────────────────┐     ┌────────────────┐
-       │                      │             │ Handle Lock    │     │ Create Broker  │
-       │                      │             │ Failure        │     │ Messages       │
-       │                      │             └────────────────┘     └───────┬────────┘
-       │                      │                                           │
-       │                      │                                           ▼
-       │                      │                                  ┌────────────────┐
-       │                      │                                  │ Send Messages  │
-       │                      │                                  │ to Broker      │
-       │                      │                                  └───────┬────────┘
-       │                      │                                          │
-       └──────────────────────┴──────────────────────────────────────────┘
-```
-
-</details>
-
-### Detailed Consumer Flow
-
-<details>
-<summary>Click to expand</summary>
-
-```
-┌───────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
-│ START │────▶│ Connection │────▶│ Configure  │────▶│ Start      │────▶│ Wait for   │
-│       │     │ Check      │     │ Consumption│     │ Consuming  │     │ Message    │
-└───────┘     └────────────┘     └────────────┘     └────────────┘     └─────┬──────┘
-                    │                                                        │
-                    ▼                                                        │
-             ┌────────────┐                                                  │
-             │ Connect()  │◀─────────────────────────────────────────────────┘
-             └────────────┘                                                  │
-                                                                             ▼
-┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐     ┌────────────┐
-│ Return to  │◀────│ Remove     │◀────│ Mark as    │◀────│ Processing │◀────│ Message    │
-│ Wait       │     │ Processing │     │ Completed  │     │ Successful?│     │ Received   │
-└────────────┘     │ Mark      │     └────────────┘     └─────┬──────┘     └────────────┘
-                   └────────────┘           ▲                  │ No               │
-                                           │                   ▼                  ▼
-                                           │          ┌────────────┐       ┌────────────┐
-                                           └──────────│ Mark as    │       │ Extract ID │
-                                                      │ Failed     │       │            │
-                                                      └────────────┘       └─────┬──────┘
-                                                                                 │
-                               ┌────────────┐     ┌────────────┐     ┌────────────┐
-                               │ process()  │◀────│ Mark as    │◀────│ Already    │
-                               │ Business   │     │ Processing │     │ Processed? │
-                               │ Logic      │     └────────────┘     └─────┬──────┘
-                               └─────┬──────┘                              │ Yes
-                                     │                                     ▼
-                                     │                              ┌────────────┐
-                                     └─────────────────────────────▶│ Skip       │
-                                                                    │ Message    │
-                                                                    └────────────┘
-```
-
-</details>
-
-## 🚀 Getting Started
-
-### 📥 Installation
+## Installation
 
 ```bash
+# Using npm
 npm install @jonaskahn/maestro
+
+# Using yarn
+yarn add @jonaskahn/maestro
 ```
 
-### 🔰 Implementation Guide
+## Quick Start
 
-To start using Maestro in your own project, follow these steps:
-
-#### 1. Create a Producer
-
-Extend the appropriate base producer class for your broker:
+### Producer Example
 
 ```javascript
-const {KafkaProducer} = require("@jonaskahn/maestro");
+// Producer
+const { DefaultProducer } = require("@jonaskahn/maestro");
 
-class MyProducer extends KafkaProducer {
-    constructor() {
-        super({
-            topic: "my-topic",
-            brokerOptions: {
-                clientOptions: {
-                    brokers: ["kafka:9092"],
-                },
-            },
-            cacheOptions: {
-                keyPrefix: "my-app",
-            },
-        });
-    }
+class OrderProducer extends DefaultProducer {
+  /**
+   * Gets the next batch of items to process
+   *
+   * @param {Object} criteria - Query criteria for filtering orders
+   * @param {number} limit - Maximum number of items to retrieve
+   * @param {Array<string>} excludedIds - IDs to exclude from the query
+   * @returns {Promise<Array>} List of pending orders
+   */
+  async getNextItems(criteria, limit, excludedIds) {
+    // Query database for pending orders with filters
+    const pendingOrders = await database.getPendingOrders(criteria, limit, excludedIds);
+    return pendingOrders;
+  }
 
-    // Optional: Override methods for custom behavior
-    getNextItems(criteria, limit, excludedIds) {
-        // Your logic to fetch items to be produced
-        return fetchItemsFromDatabase(criteria, limit);
-    }
+  /**
+   * Gets unique identifier for an item
+   *
+   * @param {Object} item - The item object
+   * @returns {string} The item's unique identifier
+   */
+  getItemId(item) {
+    return item._id || item.orderId;
+  }
 
-    getItemId(item) {
-        return item.uniqueId; // Identify your items
-    }
+  /**
+   * Connects to Kafka and initializes the database
+   *
+   * @returns {Promise<void>} - Resolves when connections are established
+   */
+  async connect() {
+    await super.connect();
+    await database.connect();
+  }
+
+  /**
+   * Cleans up database connection
+   *
+   * @returns {Promise<void>} - Resolves when cleanup is complete
+   */
+  async cleanup() {
+    await database.disconnect();
+  }
 }
+
+// Create producer with configuration
+const producer = new OrderProducer({
+  topic: "ecommerce-orders",
+  topicOptions: {
+    processingTtl: 240000,
+    lagThreshold: 100,
+    lagMonitorInterval: 5000,
+  },
+});
+
+await producer.connect();
+await producer.produce({ state: 1, priority: "normal" }, 50);
 ```
 
-#### 2. Create a Consumer
-
-Extend the appropriate base consumer class for your broker:
+### Consumer Example
 
 ```javascript
-const {KafkaConsumer} = require("@jonaskahn/maestro");
+// Consumer
+const { DefaultConsumer } = require("@jonaskahn/maestro");
 
-class MyConsumer extends KafkaConsumer {
-    constructor() {
-        super({
-            topic: "my-topic",
-            maxConcurrency: 5,
-            brokerOptions: {
-                clientOptions: {
-                    brokers: ["kafka:9092"],
-                },
-                consumerOptions: {
-                    groupId: "my-service",
-                    fromBeginning: false,
-                },
-            },
-            cacheOptions: {
-                keyPrefix: "my-app",
-            },
-        });
-    }
+class OrderConsumer extends DefaultConsumer {
+  /**
+   * Processes an order
+   *
+   * @param {Object} orderData - Order data to process
+   * @returns {Promise<Object>} Processing result
+   */
+  async process(orderData) {
+    // Validate and process the order
+    await this.validateOrder(orderData);
+    await this.processOrderSteps(orderData);
+    return {
+      orderId: this.getItemId(orderData),
+      status: "processed",
+      processedAt: new Date(),
+    };
+  }
 
-    // Implement your business logic
-    async process(message) {
-        console.log(`Processing message: ${JSON.stringify(message)}`);
-        // Your message handling logic here
-        return true;
-    }
+  /**
+   * Gets unique identifier for an item
+   *
+   * @param {Object} orderData - The order data object
+   * @returns {string} The order's unique identifier
+   */
+  getItemId(orderData) {
+    return orderData._id;
+  }
+
+  /**
+   * Checks if an item has been processed
+   *
+   * @private
+   * @param {string} itemId - The item ID to check
+   * @returns {Promise<boolean>} True if the item has been processed
+   */
+  async _isItemProcessed(itemId) {
+    return await database.isOrderCompleted(itemId);
+  }
+
+  /**
+   * Handles successful item processing
+   *
+   * @private
+   * @param {string} itemId - ID of the successfully processed item
+   * @returns {Promise<void>} - Resolves when the database is updated
+   */
+  async _onItemProcessSuccess(itemId) {
+    await database.markOrderAsCompleted(itemId);
+  }
+
+  /**
+   * Handles failed item processing
+   *
+   * @private
+   * @param {string} itemId - ID of the failed item
+   * @param {Error} error - Error that caused the failure
+   * @returns {Promise<void>} - Resolves when the database is updated
+   */
+  async _onItemProcessFailed(itemId, error) {
+    await database.markOrderAsFailed(itemId, error?.message);
+  }
 }
+
+// Create consumer with configuration
+const consumer = new OrderConsumer({
+  topic: "ecommerce-orders",
+  topicOptions: {
+    processingTtl: 240000,
+    maxConcurrency: 10,
+  },
+});
+
+await consumer.connect();
+await consumer.consume();
 ```
 
-#### 3. Run Your Application
+## Documentation
 
-```javascript
-async function main() {
-    // Producer example
-    const producer = new MyProducer();
-    await producer.connect();
-    await producer.produce({status: "pending"}, 10);
+- [Getting Started](./docs/guide/README.md)
+- [API Reference](./docs/api/README.md)
+- [Components](./docs/components/README.md)
 
-    // Consumer example
-    const consumer = new MyConsumer();
-    await consumer.connect();
-    await consumer.consume();
+## Examples
 
-    // The consumer will continue running until explicitly stopped
-}
+See the [examples](./examples/) directory for more comprehensive examples:
 
-main().catch(console.error);
-```
+- [E-commerce Order Processing](./examples/ecommerce-order-processing/): Demonstrates using Maestro for processing e-commerce orders with Kafka
 
-## 🛒 Example Application
+## Implementation Status
 
-The repository includes an e-commerce order processing example that demonstrates how to use Maestro in a real-world
-scenario:
+### Message Brokers
 
-### 🧩 Components
+- [x] Kafka - Producer and consumer implementations
+- [ ] RabbitMQ - Coming soon
+- [ ] BullMQ - Coming soon
+- [ ] AWS SQS/SNS - Future plan
+- [ ] Apache Pulsar - Future plan
 
-#### 📤 Producer Implementation
+### Cache Providers
 
-The `OrderProducer` extends `KafkaProducer` and adds:
+- [x] Redis - Full implementation with distributed locks
+- [ ] Memcached - Coming soon
+- [ ] In-memory - For testing purposes
 
-- Database integration to fetch pending orders
-- Order state management (pending, sent, failed)
-- Statistics tracking
-- Custom success/failure handling
+### Monitoring
 
-```javascript
-class OrderProducer extends KafkaProducer {
-    // Configure Kafka and Redis connections
-    constructor(_config = {}) {
-        super({
-            topic: "ecommerce-orders",
-            brokerOptions: {clientOptions: {brokers: ["localhost:9092"]}},
-            cacheOptions: {keyPrefix: "ECOMMERCE"},
-        });
-    }
+- [x] Consumer lag monitoring
+- [x] System resource monitoring
+- [ ] Prometheus metrics integration - Future plan
+- [ ] Dashboard visualization - Future plan
 
-    // Fetch pending orders from MongoDB
-    async getNextItems(criteria, limit, excludedIds) {
-        const pendingOrders = await this.getPendingOrders(
-            {
-                state: ORDER_STATES.PENDING,
-                ...criteria,
-            },
-            limit,
-            excludedIds
-        );
+## Supported Node.js Versions
 
-        return pendingOrders;
-    }
+- Node.js >= 14.0.0
 
-    // Update database when message is successfully sent
-    async _onItemProcessSuccess(orderId) {
-        await database.collections.orders.updateOne({_id: orderId}, {$set: {status: "sent", sentAt: new Date()}});
-    }
-}
-```
+## Contributing
 
-#### 📥 Consumer Implementation
+Pull requests are welcome! For major changes, please open an issue first to discuss what you would like to change.
 
-The `OrderConsumer` extends `KafkaConsumer` and adds:
+## License
 
-- Order validation and processing logic
-- Database updates for order status
-- Custom message handling
-- Processing statistics
-
-```javascript
-class OrderConsumer extends KafkaConsumer {
-    constructor(_config = {}) {
-        super({
-            topic: "ecommerce-orders",
-            maxConcurrency: 10,
-            brokerOptions: {clientOptions: {brokers: ["localhost:9092"]}},
-            cacheOptions: {keyPrefix: "ECOMMERCE"},
-        });
-    }
-
-    // Business logic for order processing
-    async process(orderData) {
-        await this.validateOrder(orderData);
-        await this.processOrderSteps(orderData);
-        return this.createProcessingResult(orderData);
-    }
-
-    // Mark order as completed in the database
-    async _onItemProcessSuccess(itemId) {
-        await database.markOrderAsCompleted(itemId);
-    }
-}
-```
-
-### 🏃‍♂️ Running the Example
-
-The example includes a Docker Compose file with Kafka, Zookeeper, Redis, and MongoDB:
-
-```bash
-cd examples/ecommerce-order-processing
-npm install
-docker-compose up -d
-npm run producer  # In one terminal
-npm run consumer  # In another terminal
-```
-
-## 📜 License
-
-MIT License
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-**Made by Jonas Kahn with 💖**
+[MIT License](./LICENSE)

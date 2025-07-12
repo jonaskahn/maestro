@@ -32,10 +32,10 @@ const LOG_FORMATS = {
  */
 const LOG_CATEGORIES = {
   CONNECTION: {
-    CONNECT: "",
-    DISCONNECT: "",
-    RECONNECT: "",
-    READY: "",
+    CONNECT: "🔌",
+    DISCONNECT: "️‍💥",
+    RECONNECT: "⛓️‍💥",
+    READY: "📍",
   },
   OPERATION: {
     START: "▶️",
@@ -46,7 +46,7 @@ const LOG_CATEGORIES = {
     TASK: "📋",
   },
   STATUS: {
-    INFO: "ℹ️",
+    INFO: "️💬",
     SUCCESS: "✅",
     WARNING: "⚠️",
     ERROR: "❌",
@@ -86,8 +86,10 @@ class LoggerService {
    * @param {string} message - Message to log
    * @param {Object} metadata - Additional context data
    */
-  logInfo(message, metadata = {}) {
-    this.logger.info(`${LOG_CATEGORIES.STATUS.INFO} ${message}`, metadata);
+  logInfo(message, metadata) {
+    this.logger.info(
+      `${LOG_CATEGORIES.STATUS.INFO} ${message?.trim()} ${metadata || JSON.stringify(metadata, null, 2)}`
+    );
   }
 
   /**
@@ -95,8 +97,10 @@ class LoggerService {
    * @param {string} message - Message to log
    * @param {Object} metadata - Additional context data
    */
-  logDebug(message, metadata = {}) {
-    this.logger.debug(`${LOG_CATEGORIES.STATUS.DEBUG} ${message}`, metadata);
+  logDebug(message, metadata) {
+    this.logger.debug(
+      `${LOG_CATEGORIES.STATUS.DEBUG} ${message?.trim()} ${metadata || JSON.stringify(metadata, null, 2)}`
+    );
   }
 
   /**
@@ -104,8 +108,10 @@ class LoggerService {
    * @param {string} message - Message to log
    * @param {Object} metadata - Additional context data
    */
-  logWarning(message, metadata = {}) {
-    this.logger.warn(`${LOG_CATEGORIES.STATUS.WARNING} ${message}`, metadata);
+  logWarning(message, metadata) {
+    this.logger.warn(
+      `${LOG_CATEGORIES.STATUS.WARNING} ${message?.trim()} ${metadata || JSON.stringify(metadata, null, 2)}`
+    );
   }
 
   /**
@@ -122,7 +128,9 @@ class LoggerService {
         }
       : {};
 
-    this.logger.error(`${LOG_CATEGORIES.STATUS.ERROR} ${message}`, { ...errorInfo, ...metadata });
+    this.logger.error(
+      `${LOG_CATEGORIES.STATUS.ERROR} ${message?.trim()} ${JSON.stringify({ ...errorInfo, ...metadata }, null, 2)}`
+    );
   }
 
   /**
@@ -131,8 +139,10 @@ class LoggerService {
    * @param {string} operation - Operation description
    * @param {Object} details - Operation-specific details
    */
-  logBatchOperation(batchId, operation, details = {}) {
-    this.logInfo(`${LOG_CATEGORIES.OPERATION.BATCH} [Batch ${batchId}] ${operation}`, details);
+  logBatchOperation(batchId, operation, details) {
+    this.logger.info(
+      `${LOG_CATEGORIES.OPERATION.BATCH} [Batch ${batchId}] ${operation} ${details ? JSON.stringify(details, null, 2) : ""}`
+    );
   }
 
   /**
@@ -141,8 +151,10 @@ class LoggerService {
    * @param {string} operation - Operation description
    * @param {Object} details - Task-specific details
    */
-  logTaskOperation(taskId, operation, details = {}) {
-    this.logInfo(`${LOG_CATEGORIES.OPERATION.TASK} [${taskId}] ${operation}`, details);
+  logTaskOperation(taskId, operation, details) {
+    this.logger.info(
+      `${LOG_CATEGORIES.OPERATION.TASK} [${taskId}] ${operation} ${details ? JSON.stringify(details, null, 2) : ""}`
+    );
   }
 
   /**
@@ -151,7 +163,7 @@ class LoggerService {
    * @param {string} event - Connection event description
    * @param {Object} details - Connection-specific details
    */
-  logConnectionEvent(service, event, details = {}) {
+  logConnectionEvent(service, event, details) {
     let icon = LOG_CATEGORIES.STATUS.INFO;
 
     if (event.includes("connect")) {
@@ -163,8 +175,7 @@ class LoggerService {
     } else if (event.includes("ready")) {
       icon = LOG_CATEGORIES.CONNECTION.READY;
     }
-
-    this.logInfo(`${icon} ${service}: ${event}`, details);
+    this.logger.info(`${icon} ${service}: ${event} ${details ? JSON.stringify(details) : ""}`);
   }
 
   /**
@@ -174,10 +185,9 @@ class LoggerService {
    * @param {number} queued - Number of queued tasks
    * @param {Object} additionalInfo - Additional concurrency metrics
    */
-  logConcurrencyStatus(active, max, queued, additionalInfo = {}) {
-    this.logInfo(
-      `${LOG_CATEGORIES.PERFORMANCE.CONCURRENCY} Concurrency Status: ${active}/${max} active, ${queued} queued`,
-      additionalInfo
+  logConcurrencyStatus(active, max, queued, additionalInfo) {
+    this.logger.info(
+      `${LOG_CATEGORIES.PERFORMANCE.CONCURRENCY} Concurrency Status: ${active}/${max} active, ${queued} queued ${additionalInfo ? JSON.stringify(additionalInfo, null, 2) : ""}`
     );
   }
 
@@ -186,7 +196,9 @@ class LoggerService {
    * @param {Object} statistics - Processing statistics object
    */
   logProcessingStatistics(statistics) {
-    this.logInfo(`${LOG_CATEGORIES.PERFORMANCE.STATS} Processing Statistics`, statistics);
+    this.logger.info(
+      `${LOG_CATEGORIES.PERFORMANCE.STATS} Processing Statistics ${statistics ? JSON.stringify(statistics, null, 2) : ""}`
+    );
   }
 
   /**
@@ -254,7 +266,7 @@ class LoggerService {
         winston.format.colorize(),
         winston.format.printf(({ timestamp, level, message, ...meta }) => {
           const metaString = Object.keys(meta).length ? ` ${JSON.stringify(meta)}` : "";
-          return `${timestamp} [${level}] ${message}${metaString}`;
+          return `${timestamp} [${level}] ${message?.trim()}${metaString}`;
         })
       ),
       [LOG_FORMATS.JSON]: winston.format.combine(timestamp, winston.format.json()),
@@ -265,7 +277,7 @@ class LoggerService {
         winston.format.printf(({ timestamp, level, message, stack, ...meta }) => {
           const metaString = Object.keys(meta).length ? `\nMeta: ${JSON.stringify(meta, null, 2)}` : "";
           const stackString = stack ? `\nStack: ${stack}` : "";
-          return `${timestamp} [${level}] ${message}${metaString}${stackString}`;
+          return `${timestamp} [${level}] ${message?.trim()}${metaString}${stackString}`;
         })
       ),
     };

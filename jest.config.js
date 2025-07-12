@@ -6,7 +6,7 @@ module.exports = {
   testEnvironment: "node",
 
   // The glob patterns Jest uses to detect test files
-  testMatch: ["**/tests/**/*.test.js"],
+  testMatch: ["**/tests/**/*.test.js", "**/tests/**/*.test.ts"],
 
   // An array of regexp pattern strings that are matched against all test paths
   testPathIgnorePatterns: ["/node_modules/"],
@@ -27,7 +27,14 @@ module.exports = {
   coverageReporters: ["text", "lcov", "clover", "html", "json-summary"],
 
   // An array of glob patterns indicating a set of files for which coverage information should be collected
-  collectCoverageFrom: ["src/**/*.js", "!**/node_modules/**", "!**/vendor/**", "!**/__tests__/**", "!**/coverage/**"],
+  collectCoverageFrom: [
+    "src/**/*.js",
+    "src/**/*.ts",
+    "!**/node_modules/**",
+    "!**/vendor/**",
+    "!**/__tests__/**",
+    "!**/coverage/**",
+  ],
 
   // The threshold enforcement for coverage results
   coverageThreshold: {
@@ -60,4 +67,12 @@ module.exports = {
 
   // Provide a timeout value for tests
   testTimeout: 10000,
+
+  // Transform configuration for TypeScript files
+  transform: {
+    "^.+\\.(ts|tsx)$": "ts-jest",
+  },
+
+  // Extension mapping for imports
+  moduleFileExtensions: ["js", "ts", "json", "node"],
 };

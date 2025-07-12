@@ -38,17 +38,38 @@ class KafkaProducer extends AbstractProducer {
    *
    * @param {Object} config - Producer configuration object
    * @param {string} config.topic - Topic to produce messages to
-   * @param {string} [config.groupId] - Producer group ID for monitoring
+   * @param {string} [config.groupId] - Producer group ID for monitoring (defaults to `${topic}-processors`)
    * @param {Object} [config.clientOptions] - Kafka client connection options
-   * @param {string} [config.clientOptions.brokers] - Comma-separated list of Kafka brokers
+   * @param {string|string[]} [config.clientOptions.brokers=['localhost:9092']] - List of Kafka brokers
+   * @param {string} [config.clientOptions.clientId] - Client ID (defaults to `${topic}-client-${timestamp}`)
    * @param {Object} [config.clientOptions.ssl] - SSL configuration options
    * @param {Object} [config.clientOptions.sasl] - SASL authentication options
+   * @param {number} [config.clientOptions.connectionTimeout] - Connection timeout from TTLConfig
+   * @param {number} [config.clientOptions.requestTimeout] - Request timeout from TTLConfig
+   * @param {boolean} [config.clientOptions.enforceRequestTimeout=true] - Whether to enforce request timeout
+   * @param {Object} [config.clientOptions.retry] - Retry options for client
    * @param {Object} [config.producerOptions] - Kafka producer specific options
-   * @param {number} [config.producerOptions.acks] - Acknowledgment level (-1, 0, 1)
-   * @param {boolean} [config.producerOptions.idempotent] - Enable idempotent production
-   * @param {string} [config.producerOptions.compression] - Compression type ('gzip', 'snappy', etc.)
+   * @param {Function} [config.producerOptions.createPartitioner=Partitioners.LegacyPartitioner] - Partitioner function
+   * @param {number} [config.producerOptions.acks=-1] - Acknowledgment level (-1=all, 0=none, 1=leader)
+   * @param {number} [config.producerOptions.timeout] - Producer request timeout in ms (defaults to requestTimeout)
+   * @param {string} [config.producerOptions.compression='none'] - Compression type ('gzip', 'snappy', 'lz4', 'zstd')
+   * @param {boolean} [config.producerOptions.idempotent=false] - Enable idempotent production
+   * @param {number} [config.producerOptions.maxInFlightRequests=5] - Max requests in flight
+   * @param {number} [config.producerOptions.transactionTimeout] - Transaction timeout in ms
+   * @param {number} [config.producerOptions.retries=10] - Number of retries for failed requests
+   * @param {Object} [config.producerOptions.retry] - Retry configuration for producer
    * @param {Object} [config.topicOptions] - Topic configuration options
-   * @param {boolean} [config.topicOptions.allowAutoTopicCreation] - Whether to create topic if it doesn't exist
+   * @param {number} [config.topicOptions.partitions=5] - Number of partitions for topic
+   * @param {number} [config.topicOptions.replicationFactor=1] - Replication factor for topic
+   * @param {boolean} [config.topicOptions.allowAutoTopicCreation=true] - Whether to create topic if it doesn't exist
+   * @param {string} [config.topicOptions.keyPrefix] - Key prefix for cache (defaults to topic name uppercase)
+   * @param {number} [config.topicOptions.processingTtl=5000] - TTL for processing state in ms
+   * @param {number} [config.topicOptions.suppressionTtl] - TTL for suppression in ms (defaults to processingTtl * 5)
+   * @param {boolean} [config.useSuppression=true] - Whether to use message suppression for deduplication
+   * @param {boolean} [config.useDistributedLock=true] - Whether to use distributed lock for coordination
+   * @param {number} [config.lagThreshold=100] - Consumer lag threshold for backpressure monitoring
+   * @param {number} [config.lagMonitorInterval=5000] - Interval for checking consumer lag in ms
+   * @param {Object} [config.cacheOptions] - Cache configuration for deduplication
    */
   constructor(config = {}) {
     super(KafkaManager.standardizeConfig(config, "producer"));

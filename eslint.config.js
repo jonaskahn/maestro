@@ -1,5 +1,7 @@
 import js from "@eslint/js";
 import prettier from "eslint-config-prettier";
+import tseslint from "@typescript-eslint/eslint-plugin";
+import tsparser from "@typescript-eslint/parser";
 
 export default [
   js.configs.recommended,
@@ -49,7 +51,28 @@ export default [
     },
   },
   {
-    files: ["*.test.js", "tests/**/*.js"],
+    files: ["**/*.ts", "**/*.d.ts"],
+    languageOptions: {
+      parser: tsparser,
+      parserOptions: {
+        ecmaVersion: 2022,
+        sourceType: "module",
+        project: "./tsconfig.json",
+      },
+    },
+    plugins: {
+      "@typescript-eslint": tseslint,
+    },
+    rules: {
+      ...tseslint.configs.recommended.rules,
+      "no-unused-vars": "off",
+      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_" }],
+      "@typescript-eslint/explicit-function-return-type": "off",
+      "@typescript-eslint/no-explicit-any": "warn",
+    },
+  },
+  {
+    files: ["*.test.js", "tests/**/*.js", "*.test.ts", "tests/**/*.ts"],
     languageOptions: {
       globals: {
         describe: "readonly",
@@ -65,15 +88,22 @@ export default [
     },
   },
   {
-    files: ["src/**/*.js", "tests/**/*.js"],
+    files: ["src/**/*.js", "src/**/*.ts", "tests/**/*.js", "tests/**/*.ts"],
     rules: {
       "no-process-exit": "off",
     },
   },
   {
-    files: ["src/abstracts/**/*.js"],
+    files: ["src/abstracts/**/*.js", "src/abstracts/**/*.ts"],
     rules: {
       "no-unused-vars": [
+        "error",
+        {
+          args: "none",
+          argsIgnorePattern: "^_",
+        },
+      ],
+      "@typescript-eslint/no-unused-vars": [
         "error",
         {
           args: "none",
