@@ -36,6 +36,13 @@ const METRICS_PROPERTIES = {
   START_TIME: "startTime",
 };
 
+/**
+ * Abstract Consumer Base Class
+ *
+ * Provides unified interface for message consumption across different message brokers
+ * with standardized message processing, concurrency management, business logic handling,
+ * and metrics tracking.
+ */
 class AbstractConsumer {
   _cacheLayer;
 
@@ -47,8 +54,14 @@ class AbstractConsumer {
   _statusReportTimer;
 
   /**
-   * Create consumer instance with configuration validation and initialization
-   * @param {Object} config Consumer configuration including topic, concurrency, cache options
+   * Creates a consumer instance with configuration validation and initialization
+   *
+   * @param {Object} config - Consumer configuration object
+   * @param {string} config.topic - Topic name to consume messages from
+   * @param {number} [config.maxConcurrency] - Maximum number of concurrent messages to process
+   * @param {number} [config.statusReportInterval] - Interval for status reporting in ms
+   * @param {Object} [config.cacheOptions] - Configuration for the cache layer
+   * @param {string} config.cacheOptions.keyPrefix - Required prefix for cache keys
    */
   constructor(config) {
     this.#preventDirectInstantiation();
@@ -139,6 +152,13 @@ class AbstractConsumer {
     this.#setStatusReporting(config);
   }
 
+  /**
+   * Creates a cache layer for message deduplication and state tracking
+   * Override to implement specific cache layer creation
+   *
+   * @param {Object} _config - Cache configuration
+   * @returns {Object|null} Cache layer instance or null if disabled
+   */
   _createCacheLayer(_config) {
     logger.logDebug("⁉️Cache layer is disabled");
     return null;
@@ -156,6 +176,9 @@ class AbstractConsumer {
     this._isShuttingDown = false;
   }
 
+  /**
+   * Removes shutdown event listeners
+   */
   _removeShutdownListeners() {
     process.removeListener("SIGINT", this.#handleGracefulShutdownConsumer);
     process.removeListener("SIGTERM", this.#handleGracefulShutdownConsumer);
@@ -167,6 +190,10 @@ class AbstractConsumer {
     this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
   }
 
+  /**
+   * Implementation-specific method to stop consuming from broker
+   * @returns {Promise<void>}
+   */
   async _stopConsumingFromBroker() {
     throw new Error("_stopConsumingFromBroker method must be implemented by subclass");
   }
@@ -175,6 +202,10 @@ class AbstractConsumer {
     return this._isConsuming === CONSUMER_STATES.CONSUMING;
   }
 
+  /**
+   * Stops consuming messages from the broker
+   * @returns {Promise<void>}
+   */
   async stopConsuming() {
     if (!this.#isCurrentlyConsuming()) {
       logger.logWarning(`${this.getBrokerType()} consumer is not currently consuming`);
@@ -201,6 +232,10 @@ class AbstractConsumer {
     }
   }
 
+  /**
+   * Implementation-specific method to disconnect from message broker
+   * @returns {Promise<void>}
+   */
   async _disconnectFromMessageBroker() {
     throw new Error("_disconnectFromMessageBroker method must be implemented by subclass");
   }
@@ -285,6 +320,9 @@ class AbstractConsumer {
     throw new Error("getBrokerType method must be implemented by subclass");
   }
 
+  /**
+   * Logs the configuration loaded for the consumer
+   */
   _logConfigurationLoaded() {
     logger.logDebug(
       `🐞 ${this.getBrokerType()?.toUpperCase()} Consumer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
@@ -308,6 +346,10 @@ class AbstractConsumer {
     }
   }
 
+  /**
+   * Implementation-specific method to connect to message broker
+   * @returns {Promise<void>}
+   */
   async _connectToMessageBroker() {
     throw new Error("_connectToMessageBroker method must be implemented by subclass");
   }
@@ -346,6 +388,11 @@ class AbstractConsumer {
     }
   }
 
+  /**
+   * Creates topic if allowed by broker and configuration
+   * Override to implement topic creation logic
+   * @returns {Promise<boolean>} True if topic was created or already exists
+   */
   async _createTopicIfAllowed() {
     logger.logWarning(
       `You see this log because you do not implemented _createTopicIfAllowed in Consumer. But it's safe to ignore`
@@ -393,10 +440,20 @@ class AbstractConsumer {
     }
   }
 
+  /**
+   * Implementation-specific method to start consuming from broker
+   * @param {Object} _handler - Message handler function
+   * @param {Object} _options - Consumption options
+   * @returns {Promise<void>}
+   */
   async _startConsumingFromBroker(_handler, _options) {
     throw new Error("_startConsumingFromBroker method must be implemented by subclass");
   }
 
+  /**
+   * Handles errors during consumption start
+   * @param {Error} error - Error that occurred
+   */
   _handleConsumingStartError(error) {
     this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
     logger.logError(`Failed to start consuming from ${this._topic}`, error);
@@ -464,6 +521,7 @@ class AbstractConsumer {
 
   /**
    * Checks if an item is already completed in the cache
+   * Override to implement specific completion check
    * @param {string} _itemId - Item identifier
    * @returns {Promise<boolean>} True if item is completed
    */
@@ -506,9 +564,9 @@ class AbstractConsumer {
 
   /**
    * Processes a message with business logic
-   * This is the method that should be overridden by user to implement business logic
+   * Must be implemented by user to define business processing logic
+   * @param {Object} _item - Message data to process
    * @returns {Promise<void>}
-   * @param _item
    */
   async process(_item) {
     throw new Error("process method must be implemented by user");
@@ -517,7 +575,7 @@ class AbstractConsumer {
   /**
    * Called when item processing is successful
    * Override to implement custom success handling
-   * @param {string} itemId - Item identifier
+   * @param {string} _itemId - Item identifier
    * @returns {Promise<void>}
    */
   async _onItemProcessSuccess(_itemId) {
@@ -531,6 +589,13 @@ class AbstractConsumer {
     logger.logInfo(`Successfully processed message: ${itemId} (key: ${messageKey}, duration: ${duration}ms)`);
   }
 
+  /**
+   * Called when item processing fails
+   * Override to implement custom failure handling
+   * @param {string} _itemId - Item identifier
+   * @param {Error} _error - Error that occurred
+   * @returns {Promise<void>}
+   */
   async _onItemProcessFailed(_itemId, _error) {
     throw new Error("_onItemProcessFailed method must be implemented by subclass");
   }
@@ -544,6 +609,13 @@ class AbstractConsumer {
     );
   }
 
+  /**
+   * Default business message handling flow
+   * @param {string} type - Message type
+   * @param {string} messageId - Message ID from broker
+   * @param {Object} item - Message data
+   * @returns {Promise<void>}
+   */
   async _defaultBusinessHandler(type, messageId, item) {
     const startTime = Date.now();
     const itemId = this.getItemId(item);
@@ -572,6 +644,10 @@ class AbstractConsumer {
     return this._cacheLayer ? this._cacheLayer.isConnected : false;
   }
 
+  /**
+   * Gets consumer status information
+   * @returns {Object} Status object with connection and metrics details
+   */
   getConfigStatus() {
     const uptime = Date.now() - this.metrics[METRICS_PROPERTIES.START_TIME];
 

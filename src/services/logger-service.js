@@ -5,9 +5,12 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Centralized Logging Service using Winston
+ * Centralized Logging Service
  *
- * Provides structured logging with multiple formats, levels, and specialized methods for application events.
+ * Provides a standardized interface for application-wide logging with multiple
+ * formats, severity levels, and specialized methods for different types of events.
+ * Built on top of Winston logger with configurable transports and formatting options.
+ * Exposes singleton instance for consistent logging across the application.
  */
 const winston = require("winston");
 
@@ -24,7 +27,18 @@ const LOG_FORMATS = {
   DETAILED: "detailed",
 };
 
+/**
+ * Logger Service Class
+ *
+ * Provides standardized logging functionality with configurable formats and levels.
+ * Supports structured logging with metadata, specialized event logging methods,
+ * and different output formats for development and production environments.
+ */
 class LoggerService {
+  /**
+   * Creates a new logger instance with configuration from environment
+   * Logger level and format are determined from LOG_LEVEL and LOG_FORMAT environment variables
+   */
   constructor() {
     this.logger = this._createLogger();
   }
@@ -139,6 +153,10 @@ class LoggerService {
     return this.logger.isLevelEnabled(level);
   }
 
+  /**
+   * Creates and configures a Winston logger instance
+   * @returns {Object} Configured Winston logger
+   */
   _createLogger() {
     const logLevel = this._getLogLevel();
     const logFormat = this._getLogFormat();
@@ -151,14 +169,27 @@ class LoggerService {
     });
   }
 
+  /**
+   * Gets log level from environment or defaults to INFO
+   * @returns {string} Log level
+   */
   _getLogLevel() {
     return process.env.LOG_LEVEL || LOG_LEVELS.INFO;
   }
 
+  /**
+   * Gets log format from environment or defaults to SIMPLE
+   * @returns {string} Log format type
+   */
   _getLogFormat() {
     return process.env.LOG_FORMAT || LOG_FORMATS.SIMPLE;
   }
 
+  /**
+   * Creates Winston format based on format type
+   * @param {string} formatType - Format type (simple, json, detailed)
+   * @returns {Object} Winston format
+   */
   _createFormat(formatType) {
     const timestamp = winston.format.timestamp({
       format: "YYYY-MM-DD HH:mm:ss",
@@ -189,6 +220,10 @@ class LoggerService {
     return formats[formatType] || formats[LOG_FORMATS.SIMPLE];
   }
 
+  /**
+   * Creates Winston transports for log outputs
+   * @returns {Array} Array of Winston transports
+   */
   _createTransports() {
     return [
       new winston.transports.Console({
@@ -199,8 +234,13 @@ class LoggerService {
   }
 }
 
+// Create singleton instance
 const loggerInstance = new LoggerService();
 
+/**
+ * Export bound methods from singleton instance and the class itself
+ * This allows both direct function usage and extending the class if needed
+ */
 module.exports = {
   logInfo: loggerInstance.logInfo.bind(loggerInstance),
   logDebug: loggerInstance.logDebug.bind(loggerInstance),

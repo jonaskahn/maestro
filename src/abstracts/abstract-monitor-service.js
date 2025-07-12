@@ -43,10 +43,26 @@ const ENV_KEYS = {
   ENABLED_RESOURCE_LAG: ["MO_BACKPRESSURE_ENABLED_RESOURCE_LAG"],
 };
 
+/**
+ * Abstract Backpressure Monitor Service
+ *
+ * Implements adaptive backoff strategies for message brokers to prevent system overload
+ * while maintaining optimal throughput. Monitors consumer lag and system resources
+ * to recommend processing delays and pause conditions.
+ */
 class AbstractMonitorService {
   /**
-   * Create backpressure monitor with configuration validation and initialization
-   * @param {Object} config Monitor configuration with lag thresholds, intervals, and caching options
+   * Creates a backpressure monitor with configuration validation and initialization
+   *
+   * @param {Object} config - Monitor configuration object
+   * @param {number} [config.lagThreshold] - Maximum acceptable message lag
+   * @param {boolean} [config.enabledResourceLag] - Whether to monitor system resources
+   * @param {number} [config.checkInterval] - Interval for checking metrics in ms
+   * @param {number} [config.rateLimitThreshold] - Threshold for rate limiting
+   * @param {number} [config.cacheTTL] - TTL for cached metrics in ms
+   * @param {number} [config.initialDelay] - Initial delay for backoff in ms
+   * @param {number} [config.maxDelay] - Maximum delay for backoff in ms
+   * @param {number} [config.exponentialFactor] - Factor for exponential backoff
    */
   constructor(config) {
     if (this.constructor === AbstractMonitorService) {
@@ -82,6 +98,12 @@ class AbstractMonitorService {
     });
   }
 
+  /**
+   * Gets environment value with fallback to default
+   * @param {Array<string>} keys - Environment variable keys to check
+   * @param {*} defaultValue - Default value if no environment variable found
+   * @returns {*} Environment value or default
+   */
   getEnvironmentValueOrDefault(keys, defaultValue) {
     for (const key of keys) {
       const value = process.env[key];
@@ -101,10 +123,18 @@ class AbstractMonitorService {
     throw new Error("getBrokerType method must be implemented by subclass");
   }
 
+  /**
+   * Connects and starts the monitoring service
+   * @returns {Promise<void>}
+   */
   async connect() {
     await this.startMonitoring();
   }
 
+  /**
+   * Disconnects and stops the monitoring service
+   * @returns {Promise<void>}
+   */
   async disconnect() {
     await this.stopMonitoring();
   }
@@ -134,6 +164,10 @@ class AbstractMonitorService {
     }
   }
 
+  /**
+   * Performs a single monitoring check cycle
+   * @returns {Promise<void>}
+   */
   async performMonitoringCheck() {
     try {
       const metrics = await this.collectCurrentMetrics();
@@ -153,6 +187,10 @@ class AbstractMonitorService {
     }
   }
 
+  /**
+   * Collects current metrics from all sources
+   * @returns {Promise<Object>} Combined metrics
+   */
   async collectCurrentMetrics() {
     const lagMetrics = await this.collectLagMetrics();
     const resourceMetrics = await this.collectResourceMetrics();
@@ -165,6 +203,10 @@ class AbstractMonitorService {
     };
   }
 
+  /**
+   * Collects lag metrics from message broker
+   * @returns {Promise<Object>} Lag metrics
+   */
   async collectLagMetrics() {
     try {
       return await this.getConsumerLag();
@@ -179,6 +221,10 @@ class AbstractMonitorService {
     }
   }
 
+  /**
+   * Collects resource metrics from system
+   * @returns {Promise<Object>} Resource metrics
+   */
   async collectResourceMetrics() {
     try {
       return await this.getResourceMetrics();

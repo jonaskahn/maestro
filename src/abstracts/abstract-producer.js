@@ -17,6 +17,13 @@ const DistributedLockService = require("../services/distributed-lock-service");
 
 const REQUIRED_CONFIG_FIELDS = ["topic"];
 
+/**
+ * Abstract Producer Base Class
+ *
+ * Provides unified interface for message production across different message brokers
+ * with deduplication strategies, caching, connection management, and distributed
+ * lock support for coordinated message publishing.
+ */
 class AbstractProducer {
   _topic;
   _config;
@@ -32,6 +39,16 @@ class AbstractProducer {
   _enabledSuppression;
   _enabledDistributedLock;
 
+  /**
+   * Creates a producer instance with configuration validation and initialization
+   *
+   * @param {Object} config - Producer configuration object
+   * @param {string} config.topic - Topic name to produce messages to
+   * @param {boolean} [config.useSuppression] - Whether to enable message suppression/deduplication
+   * @param {boolean} [config.useDistributedLock] - Whether to enable distributed lock for coordination
+   * @param {Object} [config.lockTtlMs] - TTL for distributed locks in milliseconds
+   * @param {boolean} [config.includeItems] - Whether to include original items in result
+   */
   constructor(config) {
     this.#ensureNotDirectInstantiation();
     this.#validateAndInitialize(config);
@@ -80,6 +97,13 @@ class AbstractProducer {
     this._config = config;
   }
 
+  /**
+   * Creates a cache layer for message deduplication and coordination
+   * Override to implement specific cache layer creation
+   *
+   * @param {Object} _config - Cache configuration
+   * @returns {Object|null} Cache layer instance or null if disabled
+   */
   _createCacheLayer(_config) {
     logger.logWarning("Producer cache layer is disabled");
     return null;
@@ -89,6 +113,14 @@ class AbstractProducer {
     return `${this.getBrokerType()?.toUpperCase()}-PRODUCER-DISTRIBUTED-LOCK-${topic?.toUpperCase()}`;
   }
 
+  /**
+   * Creates distributed lock service for coordinated message production
+   *
+   * @param {Object} config - Configuration object
+   * @param {string} config.topic - Topic name for lock key generation
+   * @param {number} [config.lockTtlMs] - Lock TTL in milliseconds
+   * @returns {Object|null} Distributed lock service or null if disabled
+   */
   _createDistributedLockService(config) {
     if (!this._cacheLayer || !this._enabledDistributedLock) {
       logger.logWarning("Producer distributed lock is disabled");
@@ -100,6 +132,13 @@ class AbstractProducer {
     return new DistributedLockService(lockKey, lockTtl, this._cacheLayer);
   }
 
+  /**
+   * Creates backpressure monitor service for adaptive rate limiting
+   * Override to implement specific monitor creation
+   *
+   * @param {Object} _config - Monitor configuration
+   * @returns {Object|null} Monitor service instance or null if disabled
+   */
   _createMonitorService(_config) {
     logger.logDebug("Producer backpressure monitor is disabled");
     return null;
@@ -119,6 +158,9 @@ class AbstractProducer {
     this.#initializeDependencies(config);
   }
 
+  /**
+   * Removes shutdown event listeners
+   */
   #removeShutdownListeners() {
     process.removeListener("SIGINT", this.#handleGracefulShutdownProducer);
     process.removeListener("SIGTERM", this.#handleGracefulShutdownProducer);
@@ -161,6 +203,9 @@ class AbstractProducer {
     process.on("unhandledRejection", this.#handleGracefulShutdownProducer.bind(this, "unhandledRejection"));
   }
 
+  /**
+   * Logs the configuration loaded for the producer
+   */
   _logConfigurationLoaded() {
     logger.logDebug(
       `🐞${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
@@ -188,10 +233,18 @@ class AbstractProducer {
     logger.logInfo(`ℹ️ ${this.getBrokerType()?.toUpperCase()} producer connected to monitor layer`);
   }
 
+  /**
+   * Implementation-specific method to connect to message broker
+   * @returns {Promise<void>}
+   */
   async _connectToMessageBroker() {
     throw new Error("_connectToMessageBroker method must be implemented by subclass");
   }
 
+  /**
+   * Performs connection to all dependent services
+   * @returns {Promise<void>}
+   */
   async performConnection() {
     await this.#connectCacheIfAvailable();
     await this.#connectToMonitorServiceIfAvailable();
@@ -207,7 +260,7 @@ class AbstractProducer {
   }
 
   /**
-   * Establishes connection to message broker and cache layer
+   * Establishes connection to message broker and dependent services
    * @returns {Promise<void>}
    * @throws {Error} When connection fails
    */
@@ -233,6 +286,11 @@ class AbstractProducer {
     this._topicExisted = await this._createTopicIfAllowed();
   }
 
+  /**
+   * Creates topic if allowed by broker and configuration
+   * Override to implement topic creation logic
+   * @returns {Promise<boolean>} True if topic was created or already exists
+   */
   async _createTopicIfAllowed() {
     logger.logWarning(
       `You see this log because you do not implemented _createTopicIfAllowed in Producer. But it's safe to ignore`
@@ -240,6 +298,10 @@ class AbstractProducer {
     return true;
   }
 
+  /**
+   * Implementation-specific method to disconnect from message broker
+   * @returns {Promise<void>}
+   */
   async _disconnectFromMessageBroker() {
     throw new Error("_disconnectFromMessageBroker method must be implemented by subclass");
   }
@@ -274,6 +336,10 @@ class AbstractProducer {
     }
   }
 
+  /**
+   * Performs disconnection from all dependent services
+   * @returns {Promise<void>}
+   */
   async performDisconnection() {
     await this._disconnectFromMessageBroker();
     await this.#disconnectCacheIfAvailable();
@@ -282,8 +348,9 @@ class AbstractProducer {
   }
 
   /**
-   * Disconnects from message broker and cache layer
+   * Disconnects from message broker and dependent services
    * @returns {Promise<void>}
+   * @throws {Error} When disconnection fails
    */
   async disconnect() {
     if (!this.#isAlreadyConnected()) {
@@ -396,9 +463,9 @@ class AbstractProducer {
 
   /**
    * Gets next batch of items to process based on criteria
-   * @param {Object} criteria Query criteria for items
-   * @param {number} limit Maximum number of items to fetch
-   * @param {Array<string>} excludedIds IDs to exclude from results
+   * @param {Object} _criteria - Query criteria for items
+   * @param {number} _limit - Maximum number of items to fetch
+   * @param {Array<string>} _excludedIds - IDs to exclude from results
    * @returns {Promise<Array<Object>>} Items to process
    */
   async getNextItems(_criteria, _limit, _excludedIds) {
@@ -445,7 +512,8 @@ class AbstractProducer {
 
   /**
    * Gets the item ID from an item object
-   * @param {Object} item Item to get ID from
+   * Override to implement custom ID extraction
+   * @param {Object} item - Item to get ID from
    * @returns {string} Unique item identifier
    */
   getItemId(item) {
@@ -454,17 +522,28 @@ class AbstractProducer {
 
   /**
    * Gets the message key for an item
-   * @param {Object} item Item to get key from
+   * @param {Object} item - Item to get key from
    * @returns {string} Message key
    */
   getMessageKey(item) {
     return this.getItemId(item);
   }
 
+  /**
+   * Creates broker-specific message format from items
+   * @param {Array<Object>} _items - Items to convert to messages
+   * @returns {Array<Object>} Broker-specific messages
+   */
   _createBrokerMessages(_items) {
     throw new Error("_createBrokerMessages method must be implemented by subclass");
   }
 
+  /**
+   * Implementation-specific method to send messages to broker
+   * @param {Array<Object>} _messages - Messages to send
+   * @param {Object} _options - Send options
+   * @returns {Promise<Object>} Send result details
+   */
   async _sendMessagesToBroker(_messages, _options) {
     throw new Error("_sendMessagesToBroker method must be implemented by subclass");
   }
@@ -482,6 +561,11 @@ class AbstractProducer {
     }
   }
 
+  /**
+   * Handles message skipping when lock acquisition fails
+   * @param {Array<Object>} envelopedMessages - Messages that would have been sent
+   * @returns {Object} Result with skipped count information
+   */
   _skipMessagesSending(envelopedMessages) {
     const skippedCount = envelopedMessages.length;
     logger.logWarning(
@@ -621,6 +705,11 @@ class AbstractProducer {
     }
   }
 
+  /**
+   * Returns the message type identifier
+   * Override to provide specific message type
+   * @returns {string} Message type
+   */
   getMessageType() {
     throw new Error("getMessageType method must be implemented by subclass");
   }
@@ -667,9 +756,15 @@ class AbstractProducer {
 
   /**
    * Produces messages based on item criteria
-   * @param {Object} criteria Query criteria for items
-   * @param {number} limit Maximum number of items to process
-   * @param {Object} options Production options
+   * @param {Object} criteria - Query criteria for items
+   * @param {number} limit - Maximum number of items to process
+   * @param {Object} options - Production options
+   * @param {number} [options.maxRetries] - Maximum number of retries on failure
+   * @param {number} [options.baseDelay] - Base delay for exponential backoff in ms
+   * @param {boolean} [options.skipOnLockTimeout] - Whether to skip sending if lock acquisition fails
+   * @param {boolean} [options.failOnLockTimeout] - Whether to fail if lock acquisition fails
+   * @param {boolean} [options.ignoreLocksAndSend] - Whether to ignore locks and send anyway
+   * @param {number} [options.lockWaitTime] - How long to wait for lock acquisition in ms
    * @returns {Promise<Object>} Production result with counts and details
    */
   async produce(criteria, limit, options = {}) {
@@ -714,6 +809,10 @@ class AbstractProducer {
     return this._cacheLayer ? this._cacheLayer.isConnected() : false;
   }
 
+  /**
+   * Gets configuration status information
+   * @returns {Object} Configuration status
+   */
   _getStatusConfig() {
     return {
       enabledSuppression: this.#isSuppressionFullyEnabled(),
@@ -737,7 +836,7 @@ class AbstractProducer {
 
   /**
    * Gets producer status information
-   * @returns {Promise<Object>} Status object with connection and configuration details
+   * @returns {Object} Status object with connection and configuration details
    */
   getStatus() {
     return {

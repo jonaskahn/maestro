@@ -6,6 +6,11 @@
  * LICENSE file in the root directory of this source tree.
  *
  * TTL Configuration Module
+ *
+ * Provides centralized time-to-live (TTL) configuration for various system components.
+ * Manages both primary TTL values and derived values calculated from the primaries.
+ * Handles environment variable overrides, validation of TTL relationships,
+ * and specialized configuration objects for different system components.
  */
 const logger = require("../services/logger-service");
 
@@ -40,10 +45,19 @@ const DERIVED_ENV_VARS = {
   BACKOFF_MAX_DELAY: ["MO_BACKOFF_MAX_DELAY_MS"],
 };
 
+/**
+ * TTL Configuration Class
+ *
+ * Static utility class providing time-to-live configurations for the system.
+ * Retrieves values from environment variables when available, otherwise
+ * calculates derived values from primary TTLs and validates their relationships.
+ */
 class TTLConfig {
   /**
+   * Gets all TTL values with optional overrides
+   *
    * @param {Object} overrides - Optional overrides for specific values
-   * @returns {Object} All TTL values
+   * @returns {Object} Complete set of TTL values for the system
    */
   static getAllTTLValues(overrides = {}) {
     const base = {
@@ -96,7 +110,9 @@ class TTLConfig {
   }
 
   /**
-   * @returns {Object} Lock configuration
+   * Gets configuration specific to distributed locks
+   *
+   * @returns {Object} Lock configuration with TTL, wait times, and refresh intervals
    */
   static getLockConfig() {
     const ttlValues = this.getAllTTLValues();
@@ -112,7 +128,9 @@ class TTLConfig {
   }
 
   /**
-   * @returns {Object} Cache configuration
+   * Gets configuration specific to caching operations
+   *
+   * @returns {Object} Cache configuration with processing and freezing TTLs
    */
   static getCacheConfig() {
     const ttlValues = this.getAllTTLValues();
@@ -124,7 +142,9 @@ class TTLConfig {
   }
 
   /**
-   * @returns {Object} Backpressure configuration
+   * Gets configuration specific to backpressure monitoring
+   *
+   * @returns {Object} Backpressure configuration with intervals and delays
    */
   static getBackpressureConfig() {
     const ttlValues = this.getAllTTLValues();
@@ -138,7 +158,9 @@ class TTLConfig {
   }
 
   /**
-   * @returns {Object} Kafka configuration
+   * Gets configuration specific to Kafka operations
+   *
+   * @returns {Object} Kafka configuration with timeouts
    */
   static getKafkaConfig() {
     const ttlValues = this.getAllTTLValues();
@@ -150,8 +172,11 @@ class TTLConfig {
   }
 
   /**
+   * Gets a primary TTL value with environment variable override support
+   *
    * @param {string} key - Primary TTL key
    * @returns {number} TTL value in milliseconds
+   * @throws {Error} If key is unknown
    */
   static getPrimaryTTL(key) {
     if (!PRIMARY_TTL_VALUES[key]) {
@@ -172,6 +197,8 @@ class TTLConfig {
   }
 
   /**
+   * Gets a derived TTL value with environment variable override support
+   *
    * @param {string} key - Derived TTL key
    * @param {Function} derivationFunction - Function to derive value from primary TTLs
    * @returns {number} TTL value in milliseconds
@@ -191,7 +218,10 @@ class TTLConfig {
   }
 
   /**
+   * Validates relationships between TTL values to prevent race conditions
+   *
    * @param {Object} ttlValues - Object containing all TTL values
+   * @returns {boolean} True if all relationships are valid
    * @throws {Error} If TTL value relationships are invalid and could cause race conditions
    */
   static validateTTLRelationships(ttlValues) {
@@ -223,6 +253,8 @@ class TTLConfig {
   }
 
   /**
+   * Gets the first environment variable value found from a list of keys
+   *
    * @param {string[]} keys - List of environment variable names to check
    * @returns {string|null} First found environment variable value or null
    */

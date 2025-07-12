@@ -5,10 +5,12 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Distributed Lock Service for coordinating access to shared resources across multiple processes
+ * Distributed Lock Service
  *
- * Provides cache-based distributed locking with auto-refresh capabilities to ensure only one
- * producer per topic/type processes at a time. Works with any cache implementation (Redis, Memcached, etc.)
+ * Provides coordination of access to shared resources across multiple processes
+ * using cache-based distributed locking with automatic refresh capabilities.
+ * Supports any cache implementation (Redis, Memcached, etc.) and implements
+ * retry logic with exponential backoff to handle contention.
  */
 const logger = require("./logger-service");
 const TTLConfig = require("../config/ttl-config");
@@ -27,16 +29,25 @@ const LOCK_STATES = {
 };
 
 /**
- * Distributed Lock Service for coordinating access to shared resources across multiple processes
- * Provides cache-based distributed locking with auto-refresh capabilities to ensure only one
- * producer per topic/type processes at a time. Works with any cache implementation (Redis, Memcached, etc.)
+ * Distributed Lock Service
+ *
+ * Implements distributed locking pattern to ensure exclusive access to resources
+ * across multiple processes or servers. Uses cache layer for lock storage with
+ * automatic TTL-based expiration and refresh to prevent stale locks. Provides
+ * advanced features like retry with exponential backoff and jitter.
  */
 class DistributedLockService {
   /**
-   * Creates a new distributed lock
-   * @param {string} lockKey - Cache key for the lock
-   * @param {number} ttlMs - Lock TTL in milliseconds (default: from TTLConfig)
-   * @param {Object} cacheInstance - Cache instance for lock storage (optional)
+   * Creates a new distributed lock instance
+   *
+   * @param {string} lockKey - Cache key for the lock (should be unique per resource)
+   * @param {number} ttlMs - Lock TTL in milliseconds (defaults to TTLConfig value)
+   * @param {Object} cacheInstance - Cache instance for lock storage that implements required methods
+   * @param {Function} cacheInstance.connect - Method to connect to cache
+   * @param {Function} cacheInstance.setIfNotExists - Method to set value only if key doesn't exist
+   * @param {Function} cacheInstance.get - Method to get value from cache
+   * @param {Function} cacheInstance.del - Method to delete key from cache
+   * @param {Function} cacheInstance.expire - Method to update key expiration
    */
   constructor(lockKey, ttlMs = TtlConfig.ttlMs, cacheInstance = null) {
     if (!lockKey || typeof lockKey !== "string") {
@@ -55,6 +66,10 @@ class DistributedLockService {
     this.cacheLayer = cacheInstance;
   }
 
+  /**
+   * Ensures cache is initialized and connected
+   * @returns {Promise<void>}
+   */
   async #ensureCacheInitialized() {
     if (!this.cacheLayer) {
       logger.logWarning("No cache instance provided, distributed locking disabled");
@@ -67,6 +82,11 @@ class DistributedLockService {
     }
   }
 
+  /**
+   * Attempts to acquire lock with exponential backoff retry
+   * @param {number} maxWaitTime - Maximum milliseconds to wait for lock
+   * @returns {Promise<Object>} Result object with success status
+   */
   async #attemptLockAcquisition(maxWaitTime) {
     const startTime = Date.now();
     let attemptCount = 0;
@@ -106,6 +126,10 @@ class DistributedLockService {
     return { success: false, reason: "timeout" };
   }
 
+  /**
+   * Attempts to release a held lock
+   * @returns {Promise<Object>} Result object with success status
+   */
   async #attemptLockRelease() {
     try {
       if (!this.cacheLayer) {
@@ -132,6 +156,9 @@ class DistributedLockService {
     }
   }
 
+  /**
+   * Stops automatic lock refresh interval
+   */
   #stopAutoRefresh() {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
@@ -139,6 +166,10 @@ class DistributedLockService {
     }
   }
 
+  /**
+   * Performs lock refresh by extending TTL
+   * @returns {Promise<void>}
+   */
   async #performRefresh() {
     try {
       if (this.isLocked !== LOCK_STATES.LOCKED) {
@@ -165,6 +196,9 @@ class DistributedLockService {
     }
   }
 
+  /**
+   * Starts automatic refresh interval
+   */
   #startAutoRefresh() {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
@@ -176,9 +210,13 @@ class DistributedLockService {
 
   /**
    * Attempts to acquire the distributed lock with retry logic
+   *
+   * Uses exponential backoff with jitter for retries to reduce contention.
+   * Automatically starts background refresh to maintain the lock if acquired.
+   *
    * @param {number} maxWaitTime - Maximum time to wait for lock acquisition in milliseconds
    * @returns {Promise<boolean>} True if lock was successfully acquired
-   * @throws {Error} When lock acquisition fails after all retries
+   * @throws {Error} When lock acquisition fails due to cache errors
    */
   async acquire(maxWaitTime = TtlConfig.maxWaitTimeMs) {
     await this.#ensureCacheInitialized();
@@ -198,8 +236,12 @@ class DistributedLockService {
 
   /**
    * Releases the distributed lock if currently held
+   *
+   * Verifies owner identity before releasing to prevent accidental releases
+   * by other processes. Stops the auto-refresh mechanism regardless of outcome.
+   *
    * @returns {Promise<boolean>} True if lock was successfully released
-   * @throws {Error} When lock release fails
+   * @throws {Error} When lock release fails due to cache errors
    */
   async release() {
     if (this.isLocked !== LOCK_STATES.LOCKED) {
@@ -230,6 +272,9 @@ class DistributedLockService {
 
   /**
    * Disconnects from the cache layer and cleans up resources
+   *
+   * Releases any held locks and stops all background processes.
+   *
    * @returns {Promise<void>}
    * @throws {Error} When disconnection fails
    */
@@ -250,6 +295,7 @@ class DistributedLockService {
 
   /**
    * Returns comprehensive lock status information
+   *
    * @returns {Object} Status object with lock details and cache information
    */
   getStatus() {
@@ -266,6 +312,7 @@ class DistributedLockService {
 
   /**
    * Gets the lock key used by this instance
+   *
    * @returns {string} Lock key
    */
   getLockKey() {
@@ -274,6 +321,7 @@ class DistributedLockService {
 
   /**
    * Gets the lock TTL in milliseconds
+   *
    * @returns {number} Lock TTL in milliseconds
    */
   getLockTtl() {

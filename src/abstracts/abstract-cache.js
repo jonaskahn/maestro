@@ -44,16 +44,24 @@ const ENV_KEYS = {
 };
 
 /**
- * Abstract Cache Layer Base Class for cache implementation providers
- * Provides unified interface for key-value operations across Redis, Memcached, in-memory cache
- * with job orchestration features including processing state management and message tracking
+ * Abstract Cache Layer Base Class
+ *
+ * Provides unified interface for key-value operations across different cache providers
+ * with job orchestration features including processing state management and message tracking.
  */
 class AbstractCache {
   _isConnected;
 
   /**
-   * Create cache instance with configuration validation and initialization
-   * @param {Object} config Cache configuration with keyPrefix, TTL settings, and connection options
+   * Creates a cache instance with configuration validation and initialization
+   *
+   * @param {Object} config - Cache configuration object
+   * @param {string} config.keyPrefix - Required prefix for all cache keys
+   * @param {number} [config.processingTtl] - TTL for processing state keys (defaults to CacheConfig value)
+   * @param {number} [config.suppressionTtl] - TTL for suppression keys (defaults to 3x processing TTL)
+   * @param {Object} [config.connectionOptions] - Cache provider-specific connection options
+   * @param {Object} [config.retryOptions] - Options for connection retry behavior
+   * @param {string} [config.implementation] - Cache implementation type identifier
    */
   constructor(config) {
     if (this.constructor === AbstractCache) {
@@ -106,7 +114,7 @@ class AbstractCache {
   }
 
   /**
-   * Establish connection to cache implementation
+   * Establishes connection to the cache implementation
    * @returns {Promise<void>}
    */
   async connect() {
@@ -126,16 +134,24 @@ class AbstractCache {
     }
   }
 
+  /**
+   * Checks if a connection already exists
+   * @returns {Promise<boolean>}
+   */
   async _checkExistingConnection() {
     throw new Error("_checkExistingConnection method must be implemented by subclass");
   }
 
+  /**
+   * Establishes connection to the specific cache implementation
+   * @returns {Promise<void>}
+   */
   async _connectTo() {
     throw new Error("_connectTo method must be implemented by subclass");
   }
 
   /**
-   * Disconnect from cache implementation
+   * Disconnects from the cache implementation
    * @returns {Promise<void>}
    */
   async disconnect() {
@@ -150,18 +166,36 @@ class AbstractCache {
     }
   }
 
+  /**
+   * Checks if the cache is currently connected
+   * @returns {boolean}
+   */
   isConnected() {
     return this._isConnected === CONNECTION_STATES.CONNECTED;
   }
 
+  /**
+   * Checks if the cache is currently disconnected
+   * @returns {boolean}
+   */
   isDisconnected() {
     return this._isConnected === CONNECTION_STATES.DISCONNECTED;
   }
 
+  /**
+   * Disconnects from the specific cache implementation
+   * @returns {Promise<void>}
+   */
   async _disconnectFrom() {
     throw new Error("_disconnectFrom method must be implemented by subclass");
   }
 
+  /**
+   * Validates key and value for storage operations
+   * @param {string} key - Key to validate
+   * @param {any} value - Value to validate
+   * @throws {Error} When validation fails
+   */
   validateKeyValue(key, value) {
     if (!this.isNonEmptyString(key)) {
       throw new Error("Key must be a non-empty string");
@@ -172,12 +206,22 @@ class AbstractCache {
     }
   }
 
+  /**
+   * Ensures the cache is connected before operations
+   * @throws {Error} When cache is not connected
+   */
   ensureConnected() {
     if (this.isDisconnected()) {
       throw new Error("Cache is not connected");
     }
   }
 
+  /**
+   * Logs key operations for debugging
+   * @param {string} operation - Operation being performed
+   * @param {string} key - Key being operated on
+   * @param {number} ttl - Time-to-live value in milliseconds
+   */
   logKeyOperation(operation, key, ttl = null) {
     const logData = { key, operation };
     if (ttl) {
@@ -187,10 +231,10 @@ class AbstractCache {
   }
 
   /**
-   * Set a value in the cache
-   * @param {string} key Key to set
-   * @param {string|Object} value Value to store
-   * @param {number} ttlMs TTL in milliseconds
+   * Sets a value in the cache
+   * @param {string} key - Key to set
+   * @param {string|Object} value - Value to store
+   * @param {number} ttlMs - TTL in milliseconds
    * @returns {Promise<boolean>} Success indicator
    */
   async set(key, value, ttlMs) {
@@ -200,13 +244,20 @@ class AbstractCache {
     return await this._setKeyValue(key, value, ttlMs);
   }
 
+  /**
+   * Implementation-specific method to set a value
+   * @param {string} key - Key to set
+   * @param {string|Object} value - Value to store
+   * @param {number} ttlMs - TTL in milliseconds
+   * @returns {Promise<boolean>} Success indicator
+   */
   async _setKeyValue(key, value, ttlMs) {
     throw new Error("_setKeyValue method must be implemented by subclass");
   }
 
   /**
-   * Get a value from the cache
-   * @param {string} key Key to retrieve
+   * Gets a value from the cache
+   * @param {string} key - Key to retrieve
    * @returns {Promise<any>} Retrieved value or null
    */
   async get(key) {
@@ -218,13 +269,18 @@ class AbstractCache {
     return await this._getKeyValue(key);
   }
 
+  /**
+   * Implementation-specific method to get a value
+   * @param {string} _key - Key to retrieve
+   * @returns {Promise<any>} Retrieved value or null
+   */
   async _getKeyValue(_key) {
     throw new Error("_getKeyValue method must be implemented by subclass");
   }
 
   /**
-   * Delete a key from the cache
-   * @param {string} key Key to delete
+   * Deletes a key from the cache
+   * @param {string} key - Key to delete
    * @returns {Promise<boolean>} Success indicator
    */
   async del(key) {
@@ -236,15 +292,20 @@ class AbstractCache {
     return await this._deleteKey(key);
   }
 
+  /**
+   * Implementation-specific method to delete a key
+   * @param {string} _key - Key to delete
+   * @returns {Promise<boolean>} Success indicator
+   */
   async _deleteKey(_key) {
     throw new Error("_deleteKey method must be implemented by subclass");
   }
 
   /**
-   * Set a value only if the key doesn't exist
-   * @param {string} key Key to set
-   * @param {string|Object} value Value to store
-   * @param {number} ttlMs TTL in milliseconds
+   * Sets a value only if the key doesn't exist
+   * @param {string} key - Key to set
+   * @param {string|Object} value - Value to store
+   * @param {number} ttlMs - TTL in milliseconds
    * @returns {Promise<boolean>} True if set, false if key exists
    */
   async setIfNotExists(key, value, ttlMs) {
@@ -254,13 +315,20 @@ class AbstractCache {
     return await this._setKeyIfNotExists(key, value, ttlMs);
   }
 
+  /**
+   * Implementation-specific method to set a value if key doesn't exist
+   * @param {string} _key - Key to set
+   * @param {string|Object} _value - Value to store
+   * @param {number} _ttlMs - TTL in milliseconds
+   * @returns {Promise<boolean>} True if set, false if key exists
+   */
   async _setKeyIfNotExists(_key, _value, _ttlMs) {
     throw new Error("_setKeyIfNotExists method must be implemented by subclass");
   }
 
   /**
-   * Check if a key exists in the cache
-   * @param {string} key Key to check
+   * Checks if a key exists in the cache
+   * @param {string} key - Key to check
    * @returns {Promise<boolean>} True if exists
    */
   async exists(key) {
@@ -271,14 +339,19 @@ class AbstractCache {
     return await this._checkKeyExists(key);
   }
 
+  /**
+   * Implementation-specific method to check if a key exists
+   * @param {string} _key - Key to check
+   * @returns {Promise<boolean>} True if exists
+   */
   async _checkKeyExists(_key) {
     throw new Error("_checkKeyExists method must be implemented by subclass");
   }
 
   /**
-   * Set or update the expiration for a key
-   * @param {string} key Key to update
-   * @param {number} ttlMs New TTL in milliseconds
+   * Sets or updates the expiration for a key
+   * @param {string} key - Key to update
+   * @param {number} ttlMs - New TTL in milliseconds
    * @returns {Promise<boolean>} Success indicator
    */
   async expire(key, ttlMs) {
@@ -295,13 +368,19 @@ class AbstractCache {
     return await this._setKeyExpiry(key, ttlMs);
   }
 
+  /**
+   * Implementation-specific method to set key expiry
+   * @param {string} _key - Key to update
+   * @param {number} _ttlMs - TTL in milliseconds
+   * @returns {Promise<boolean>} Success indicator
+   */
   async _setKeyExpiry(_key, _ttlMs) {
     throw new Error("_setKeyExpiry method must be implemented by subclass");
   }
 
   /**
-   * Find keys matching a pattern
-   * @param {string} pattern Pattern to match
+   * Finds keys matching a pattern
+   * @param {string} pattern - Pattern to match
    * @returns {Promise<string[]>} Matching keys
    */
   async keys(pattern) {
@@ -315,13 +394,18 @@ class AbstractCache {
     return keys;
   }
 
+  /**
+   * Implementation-specific method to find keys by pattern
+   * @param {string} _pattern - Pattern to match
+   * @returns {Promise<string[]>} Matching keys
+   */
   async _findKeysByPattern(_pattern) {
     throw new Error("_findKeysByPattern method must be implemented by subclass");
   }
 
   /**
-   * Mark an item as being processed
-   * @param {string} itemId Item identifier
+   * Marks an item as being processed
+   * @param {string} itemId - Item identifier
    * @returns {Promise<boolean>} Success indicator
    */
   async markAsProcessing(itemId) {
@@ -334,8 +418,8 @@ class AbstractCache {
   }
 
   /**
-   * Mark an item as being processed
-   * @param {string} itemId Item identifier
+   * Marks an item as completed processing
+   * @param {string} itemId - Item identifier
    * @returns {Promise<boolean>} Success indicator
    */
   async markAsCompletedProcessing(itemId) {
@@ -347,6 +431,11 @@ class AbstractCache {
     return await this.del(key);
   }
 
+  /**
+   * Marks an item as suppressed to prevent duplicate processing
+   * @param {string} itemId - Item identifier
+   * @returns {Promise<boolean>} Success indicator
+   */
   async markAsSuppressed(itemId) {
     if (!this.isNonEmptyString(itemId)) {
       throw new Error("Item ID must be a non-empty string");
@@ -357,9 +446,9 @@ class AbstractCache {
   }
 
   /**
-   * Check if a message was sent recently
-   * @param {string} itemId Item identifier
-   * @returns {Promise<boolean>} True if sent recently
+   * Checks if an item was processed recently
+   * @param {string} itemId - Item identifier
+   * @returns {Promise<boolean>} True if suppressed recently
    */
   async isSuppressedRecently(itemId) {
     if (!this.isNonEmptyString(itemId)) {
@@ -372,13 +461,19 @@ class AbstractCache {
   }
 
   /**
-   * Get IDs of all items currently being processed
+   * Gets IDs of all items currently being processed
    * @returns {Promise<string[]>} Processing item IDs
    */
   async getProcessingIds() {
     return await this.getIdsByPrefix("processing", this.config.processingPrefix);
   }
 
+  /**
+   * Gets IDs by key prefix
+   * @param {string} typeName - Type name for logging
+   * @param {string} keyPrefix - Key prefix to search
+   * @returns {Promise<string[]>} Matching IDs
+   */
   async getIdsByPrefix(typeName, keyPrefix) {
     try {
       const pattern = `${keyPrefix}*`;
@@ -395,8 +490,8 @@ class AbstractCache {
   }
 
   /**
-   * Get IDs of all items in freezing state
-   * @returns {Promise<string[]>} Freezing item IDs
+   * Gets IDs of all suppressed items
+   * @returns {Promise<string[]>} Suppressed item IDs
    */
   async getSuppressedIds() {
     return await this.getIdsByPrefix("suppressed", this.config.suppressionPrefix);
