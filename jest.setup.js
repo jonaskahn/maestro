@@ -5,8 +5,7 @@
  * and applying global configurations.
  */
 
-// Increase the default max listeners to fix memory leak warning
-require("events").EventEmitter.defaultMaxListeners = 20;
+require("events").EventEmitter.defaultMaxListeners = 100;
 
 // Silence console logs during tests unless explicitly needed
 global.console = {
@@ -17,3 +16,5 @@ global.console = {
   warn: jest.fn(),
   error: jest.fn(),
 };
+
+process.env.MO_TASK_PROCESSING_BASE_TTL_MS = "10000";

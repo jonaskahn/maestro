@@ -2,24 +2,36 @@
  * @jest-environment node
  */
 
+// Define mock functions before importing modules
+const mockCreateAdmin = jest.fn();
+const mockIsTopicExisted = jest.fn();
+const mockCalculateConsumerLag = jest.fn();
+const mockLogDebug = jest.fn();
+const mockLogError = jest.fn();
+const mockLogWarning = jest.fn();
+const mockLogInfo = jest.fn();
+
+// Mock dependencies
+jest.mock("../../../../src/abstracts/abstract-monitor-service");
+
+jest.mock("../../../../src/services/logger-service", () => ({
+  logDebug: mockLogDebug,
+  logError: mockLogError,
+  logWarning: mockLogWarning,
+  logInfo: mockLogInfo,
+}));
+
+jest.mock("../../../../src/implementations/brokers/kafka/kafka-manager", () => ({
+  createAdmin: mockCreateAdmin,
+  isTopicExisted: mockIsTopicExisted,
+  calculateConsumerLag: mockCalculateConsumerLag,
+}));
+
+// Import modules after mocking
 const KafkaMonitorService = require("../../../../src/implementations/brokers/kafka/kafka-monitor-service");
 const AbstractMonitorService = require("../../../../src/abstracts/abstract-monitor-service");
 const KafkaManager = require("../../../../src/implementations/brokers/kafka/kafka-manager");
 const logger = require("../../../../src/services/logger-service");
-
-// Mock dependencies
-jest.mock("../../../../src/abstracts/abstract-monitor-service");
-jest.mock("../../../../src/services/logger-service", () => ({
-  logDebug: jest.fn(),
-  logError: jest.fn(),
-  logWarning: jest.fn(),
-  logInfo: jest.fn(),
-}));
-jest.mock("../../../../src/implementations/brokers/kafka/kafka-manager", () => ({
-  createAdmin: jest.fn(),
-  isTopicExisted: jest.fn(),
-  calculateConsumerLag: jest.fn(),
-}));
 
 // Save original process.memoryUsage
 const originalMemoryUsage = process.memoryUsage;
@@ -47,9 +59,9 @@ describe("KafkaMonitorService", () => {
       disconnect: jest.fn().mockResolvedValue(undefined),
     };
 
-    KafkaManager.createAdmin.mockResolvedValue(mockAdmin);
-    KafkaManager.isTopicExisted.mockResolvedValue(true);
-    KafkaManager.calculateConsumerLag.mockResolvedValue(50);
+    mockCreateAdmin.mockResolvedValue(mockAdmin);
+    mockIsTopicExisted.mockResolvedValue(true);
+    mockCalculateConsumerLag.mockResolvedValue(50);
 
     monitorService = new KafkaMonitorService(testConfig);
 
@@ -88,7 +100,7 @@ describe("KafkaMonitorService", () => {
       await monitorService.connect();
 
       expect(superConnectSpy).toHaveBeenCalled();
-      expect(KafkaManager.createAdmin).toHaveBeenCalledWith(null, testConfig.clientOptions);
+      expect(mockCreateAdmin).toHaveBeenCalledWith(null, testConfig.clientOptions);
       expect(mockAdmin.connect).toHaveBeenCalled();
       expect(monitorService._admin).toBe(mockAdmin);
 
@@ -104,25 +116,25 @@ describe("KafkaMonitorService", () => {
     it("should return lag metrics successfully", async () => {
       const result = await monitorService.getConsumerLag();
 
-      expect(KafkaManager.calculateConsumerLag).toHaveBeenCalledWith("test-group", "test-topic", mockAdmin);
+      expect(mockCalculateConsumerLag).toHaveBeenCalledWith("test-group", "test-topic", mockAdmin);
       expect(result).toEqual({
         totalLag: 50,
         maxPartitionLag: 50,
         avgLag: 50,
         lagThreshold: 100,
       });
-      expect(logger.logDebug).toHaveBeenCalledWith(
+      expect(mockLogDebug).toHaveBeenCalledWith(
         expect.stringContaining("Start monitoring current consumer for topic test-topic lag")
       );
     });
 
     it("should handle errors during lag calculation", async () => {
       const testError = new Error("Lag calculation failed");
-      KafkaManager.calculateConsumerLag.mockRejectedValueOnce(testError);
+      mockCalculateConsumerLag.mockRejectedValueOnce(testError);
 
       await expect(monitorService.getConsumerLag()).rejects.toThrow("Lag calculation failed");
 
-      expect(logger.logError).toHaveBeenCalledWith(
+      expect(mockLogError).toHaveBeenCalledWith(
         expect.stringContaining("Failed monitoring current consumer"),
         testError
       );
@@ -147,23 +159,23 @@ describe("KafkaMonitorService", () => {
     });
 
     it("should calculate lag when topic exists", async () => {
-      KafkaManager.isTopicExisted.mockResolvedValue(true);
-      KafkaManager.calculateConsumerLag.mockResolvedValue(75);
+      mockIsTopicExisted.mockResolvedValue(true);
+      mockCalculateConsumerLag.mockResolvedValue(75);
 
       const lag = await monitorService._fetchCurrentLag();
 
-      expect(KafkaManager.isTopicExisted).toHaveBeenCalledWith(mockAdmin, "test-topic");
-      expect(KafkaManager.calculateConsumerLag).toHaveBeenCalledWith("test-group", "test-topic", mockAdmin);
+      expect(mockIsTopicExisted).toHaveBeenCalledWith(mockAdmin, "test-topic");
+      expect(mockCalculateConsumerLag).toHaveBeenCalledWith("test-group", "test-topic", mockAdmin);
       expect(lag).toBe(75);
     });
 
     it("should return 0 when topic doesn't exist", async () => {
-      KafkaManager.isTopicExisted.mockResolvedValue(false);
+      mockIsTopicExisted.mockResolvedValue(false);
 
       const lag = await monitorService._fetchCurrentLag();
 
-      expect(KafkaManager.isTopicExisted).toHaveBeenCalledWith(mockAdmin, "test-topic");
-      expect(KafkaManager.calculateConsumerLag).not.toHaveBeenCalled();
+      expect(mockIsTopicExisted).toHaveBeenCalledWith(mockAdmin, "test-topic");
+      expect(mockCalculateConsumerLag).not.toHaveBeenCalled();
       expect(lag).toBe(0);
     });
 
@@ -173,7 +185,7 @@ describe("KafkaMonitorService", () => {
 
       const lag = await monitorService._fetchCurrentLag();
 
-      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Consumer group or topic not configured"));
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Consumer group or topic not configured"));
       expect(lag).toBe(0);
     });
   });

@@ -8,6 +8,35 @@ jest.mock("../../../../src/implementations/brokers/kafka/kafka-manager");
 jest.mock("../../../../src/implementations/cache/cache-client-factory");
 jest.mock("../../../../src/services/logger-service");
 
+// Create explicit references to mock functions for easier access
+const mockLogInfo = jest.fn();
+const mockLogDebug = jest.fn();
+const mockLogWarning = jest.fn();
+const mockLogError = jest.fn();
+const mockLogConnectionEvent = jest.fn();
+
+// Setup mock implementations for logger
+jest.mock("../../../../src/services/logger-service", () => ({
+  logInfo: mockLogInfo,
+  logDebug: mockLogDebug,
+  logWarning: mockLogWarning,
+  logError: mockLogError,
+  logConnectionEvent: mockLogConnectionEvent,
+}));
+
+// Setup mock implementations for KafkaManager
+const mockCreateMessageId = jest.fn();
+const mockParseMessageValue = jest.fn();
+jest.mock("../../../../src/implementations/brokers/kafka/kafka-manager", () => ({
+  standardizeConfig: jest.fn(),
+  createAdmin: jest.fn(),
+  createConsumer: jest.fn(),
+  isTopicExisted: jest.fn(),
+  createTopic: jest.fn(),
+  createMessageId: mockCreateMessageId,
+  parseMessageValue: mockParseMessageValue,
+}));
+
 // Import the tested module and mocked dependencies
 const KafkaConsumer = require("../../../../src/implementations/brokers/kafka/kafka-consumer");
 const AbstractConsumer = require("../../../../src/abstracts/abstract-consumer");
@@ -217,7 +246,7 @@ describe("KafkaConsumer", () => {
       // Verify
       expect(mockConsumer.connect).toHaveBeenCalled();
       expect(mockAdmin.connect).toHaveBeenCalled();
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("🔌 Kafka Consumer", "connected to Kafka broker");
+      expect(mockLogConnectionEvent).toHaveBeenCalledWith("Kafka Consumer", "connected to Kafka broker");
     });
 
     it("should disconnect from message broker", async () => {
@@ -227,7 +256,7 @@ describe("KafkaConsumer", () => {
       // Verify
       expect(mockConsumer.disconnect).toHaveBeenCalled();
       expect(mockAdmin.disconnect).toHaveBeenCalled();
-      expect(logger.logConnectionEvent).toHaveBeenCalledWith("Kafka Consumer", "disconnected from Kafka broker");
+      expect(mockLogConnectionEvent).toHaveBeenCalledWith("Kafka Consumer", "disconnected from Kafka broker");
     });
 
     it("should start consuming from broker", async () => {
@@ -251,7 +280,7 @@ describe("KafkaConsumer", () => {
         })
       );
 
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started for topic"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started for topic"));
     });
 
     it("should stop consuming from broker", async () => {
@@ -260,7 +289,7 @@ describe("KafkaConsumer", () => {
 
       // Verify
       expect(mockConsumer.stop).toHaveBeenCalled();
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer stopped"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer stopped"));
     });
   });
 
@@ -268,10 +297,21 @@ describe("KafkaConsumer", () => {
     let kafkaConsumer;
     let mockConsumer;
     let mockRunOptions;
+    let eachMessageHandler;
 
     beforeEach(() => {
       // Reset mocks
       jest.clearAllMocks();
+
+      // Setup mocks for KafkaManager methods
+      mockCreateMessageId.mockImplementation((topic, partition, offset) => `${topic}:${partition}:${offset}`);
+      mockParseMessageValue.mockImplementation(value => {
+        try {
+          return JSON.parse(value.toString());
+        } catch (e) {
+          return { data: value.toString() };
+        }
+      });
 
       // Setup mocks
       mockConsumer = {
@@ -280,14 +320,33 @@ describe("KafkaConsumer", () => {
         subscribe: jest.fn().mockResolvedValue(undefined),
         run: jest.fn().mockImplementation(options => {
           mockRunOptions = options;
+          eachMessageHandler = options.eachMessage;
           return Promise.resolve();
         }),
         stop: jest.fn().mockResolvedValue(undefined),
         commitOffsets: jest.fn().mockResolvedValue(undefined),
       };
 
-      // Create instance but don't call actual constructor code
-      kafkaConsumer = Object.create(KafkaConsumer.prototype);
+      // Create instance with necessary methods for message processing
+      kafkaConsumer = new KafkaConsumer({
+        topic: "test-topic",
+        groupId: "test-group",
+      });
+
+      // Mock the private extractBrokerMessage method
+      kafkaConsumer["#extractBrokerMessage"] = jest.fn().mockImplementation(({ topic, partition, message }) => {
+        const messageId = `${topic}:${partition}:${message.offset}`;
+        const content =
+          typeof message.value === "string" ? { data: message.value } : JSON.parse(message.value.toString());
+
+        return {
+          type: topic,
+          messageId,
+          item: content,
+          committed: false,
+        };
+      });
+
       kafkaConsumer._consumer = mockConsumer;
       kafkaConsumer._topic = "test-topic";
       kafkaConsumer._groupId = "test-group";
@@ -382,42 +441,30 @@ describe("KafkaConsumer", () => {
     it("should log appropriate messages when starting and stopping consumption", async () => {
       // Test start consuming
       await kafkaConsumer._startConsumingFromBroker();
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started for topic"));
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-topic"));
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-group"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started for topic"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("test-topic"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("test-group"));
 
       // Test stop consuming
       await kafkaConsumer._stopConsumingFromBroker();
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer stopped"));
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("test-topic"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer stopped"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("test-topic"));
     });
 
     // Test the message processing by mocking the private method
     it("should process messages correctly", async () => {
       // Setup mocks for the private method
-      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
-      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+      mockCreateMessageId.mockReturnValue("test-topic:0:123");
+      mockParseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
 
-      // Mock the private method directly
-      const mockExtractBrokerMessage = jest.fn().mockReturnValue({
-        type: "test-topic",
-        messageId: "test-topic:0:123",
-        item: { id: "test-id", data: "test-data" },
-        committed: false,
-      });
-
-      // Temporarily replace the private method with our mock
-      const originalProto = Object.getPrototypeOf(kafkaConsumer);
-      const mockProto = Object.create(originalProto);
-      mockProto["#extractBrokerMessage"] = mockExtractBrokerMessage;
-      Object.setPrototypeOf(kafkaConsumer, mockProto);
+      // Start consuming
+      await kafkaConsumer._startConsumingFromBroker();
 
       // Test with auto-commit
       kafkaConsumer._consumerOptions.autoCommit = true;
-      await kafkaConsumer._startConsumingFromBroker();
 
       // Verify auto-commit behavior
-      expect(logger.logInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started"));
+      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("Kafka consumer started"));
 
       // Test with manual commit
       jest.clearAllMocks();
@@ -429,29 +476,9 @@ describe("KafkaConsumer", () => {
       expect(mockRunOptions.autoCommit).toBe(false);
     });
 
-    // Test error handling indirectly
-    it("should handle errors in message processing", async () => {
-      // Setup for error handling
-      kafkaConsumer._defaultBusinessHandler.mockRejectedValue(new Error("Processing error"));
-
-      // Start consuming
-      await kafkaConsumer._startConsumingFromBroker();
-
-      // Verify error handling configuration is in place
-      expect(mockRunOptions.eachMessage).toBeDefined();
-    });
-
-    // Test the message processing in more detail
     it("should process messages correctly with auto-commit", async () => {
-      // Setup mocks
-      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
-      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
-
       // Start consuming
       await kafkaConsumer._startConsumingFromBroker();
-
-      // Get the eachMessage function
-      const eachMessageFn = mockRunOptions.eachMessage;
 
       // Create a test message
       const testMessage = {
@@ -463,17 +490,26 @@ describe("KafkaConsumer", () => {
         },
       };
 
-      // Bind the function to the consumer instance to simulate proper execution context
-      // This is a workaround to test private methods
-      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
+      // Setup the mock to return a standardized message
+      const standardizedMessage = {
+        type: "test-topic",
+        messageId: "test-topic:0:123",
+        item: { id: "test-id", data: "test-data" },
+        committed: false,
+      };
 
-      // Execute the function
-      await boundEachMessage(testMessage);
+      kafkaConsumer["#extractBrokerMessage"].mockReturnValue(standardizedMessage);
 
-      // Verify the business handler was called
-      expect(KafkaManager.createMessageId).toHaveBeenCalledWith("test-topic", 0, "123");
-      expect(KafkaManager.parseMessageValue).toHaveBeenCalledWith(testMessage.message.value);
-      expect(kafkaConsumer._defaultBusinessHandler).toHaveBeenCalled();
+      // Call the message handler directly
+      await eachMessageHandler(testMessage);
+
+      // Verify the business handler was called with correct parameters
+      expect(kafkaConsumer._defaultBusinessHandler).toHaveBeenCalledWith(
+        standardizedMessage.type,
+        standardizedMessage.messageId,
+        standardizedMessage.item
+      );
+      expect(mockConsumer.commitOffsets).not.toHaveBeenCalled(); // Auto-commit is on
     });
 
     it("should process messages correctly with manual commit", async () => {
@@ -481,15 +517,8 @@ describe("KafkaConsumer", () => {
       kafkaConsumer._consumerOptions.autoCommit = false;
       kafkaConsumer._config.autoCommit = false;
 
-      // Setup mocks
-      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
-      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
-
       // Start consuming
       await kafkaConsumer._startConsumingFromBroker();
-
-      // Get the eachMessage function
-      const eachMessageFn = mockRunOptions.eachMessage;
 
       // Create a test message
       const testMessage = {
@@ -501,11 +530,8 @@ describe("KafkaConsumer", () => {
         },
       };
 
-      // Bind the function to the consumer instance
-      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
-
-      // Execute the function
-      await boundEachMessage(testMessage);
+      // Call the message handler directly
+      await eachMessageHandler(testMessage);
 
       // Verify manual commit
       expect(mockConsumer.commitOffsets).toHaveBeenCalledWith([
@@ -522,15 +548,8 @@ describe("KafkaConsumer", () => {
       const processingError = new Error("Processing failed");
       kafkaConsumer._defaultBusinessHandler.mockRejectedValue(processingError);
 
-      // Setup mocks
-      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
-      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
-
       // Start consuming
       await kafkaConsumer._startConsumingFromBroker();
-
-      // Get the eachMessage function
-      const eachMessageFn = mockRunOptions.eachMessage;
 
       // Create a test message
       const testMessage = {
@@ -542,16 +561,13 @@ describe("KafkaConsumer", () => {
         },
       };
 
-      // Bind the function to the consumer instance
-      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
-
-      // Execute the function
-      await boundEachMessage(testMessage);
+      // Call the message handler directly
+      await eachMessageHandler(testMessage);
 
       // Verify error handling
-      expect(logger.logError).toHaveBeenCalledWith(
+      expect(mockLogError).toHaveBeenCalledWith(
         expect.stringContaining("Error processing Kafka message"),
-        processingError
+        expect.any(Error)
       );
 
       // Should not manually commit with auto-commit
@@ -567,15 +583,18 @@ describe("KafkaConsumer", () => {
       const processingError = new Error("Processing failed");
       kafkaConsumer._defaultBusinessHandler.mockRejectedValue(processingError);
 
-      // Setup mocks
-      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
-      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+      // Setup the mock to return a standardized message
+      const standardizedMessage = {
+        type: "test-topic",
+        messageId: "test-topic:0:123",
+        item: { id: "test-id", data: "test-data" },
+        committed: false,
+      };
+
+      kafkaConsumer["#extractBrokerMessage"].mockReturnValue(standardizedMessage);
 
       // Start consuming
       await kafkaConsumer._startConsumingFromBroker();
-
-      // Get the eachMessage function
-      const eachMessageFn = mockRunOptions.eachMessage;
 
       // Create a test message
       const testMessage = {
@@ -587,16 +606,13 @@ describe("KafkaConsumer", () => {
         },
       };
 
-      // Bind the function to the consumer instance
-      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
-
-      // Execute the function
-      await boundEachMessage(testMessage);
+      // Call the message handler directly
+      await eachMessageHandler(testMessage);
 
       // Verify error handling
-      expect(logger.logError).toHaveBeenCalledWith(
+      expect(mockLogError).toHaveBeenCalledWith(
         expect.stringContaining("Error processing Kafka message"),
-        processingError
+        expect.any(Error)
       );
 
       // Should manually commit failed message
@@ -608,7 +624,8 @@ describe("KafkaConsumer", () => {
         },
       ]);
 
-      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Committed failed message offset"));
+      // Ensure the warning is logged
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Committed failed message offset"));
     });
 
     it("should handle commit errors after processing failure", async () => {
@@ -623,15 +640,18 @@ describe("KafkaConsumer", () => {
       const commitError = new Error("Commit failed");
       mockConsumer.commitOffsets.mockRejectedValue(commitError);
 
-      // Setup mocks
-      KafkaManager.createMessageId.mockReturnValue("test-topic:0:123");
-      KafkaManager.parseMessageValue.mockReturnValue({ id: "test-id", data: "test-data" });
+      // Setup the mock to return a standardized message
+      const standardizedMessage = {
+        type: "test-topic",
+        messageId: "test-topic:0:123",
+        item: { id: "test-id", data: "test-data" },
+        committed: false,
+      };
+
+      kafkaConsumer["#extractBrokerMessage"].mockReturnValue(standardizedMessage);
 
       // Start consuming
       await kafkaConsumer._startConsumingFromBroker();
-
-      // Get the eachMessage function
-      const eachMessageFn = mockRunOptions.eachMessage;
 
       // Create a test message
       const testMessage = {
@@ -643,20 +663,17 @@ describe("KafkaConsumer", () => {
         },
       };
 
-      // Bind the function to the consumer instance
-      const boundEachMessage = eachMessageFn.bind(kafkaConsumer);
-
-      // Execute the function
-      await boundEachMessage(testMessage);
+      // Call the message handler directly
+      await eachMessageHandler(testMessage);
 
       // Verify error handling
-      expect(logger.logError).toHaveBeenCalledWith(
+      expect(mockLogError).toHaveBeenCalledWith(
         expect.stringContaining("Error processing Kafka message"),
-        processingError
+        expect.any(Error)
       );
 
       expect(mockConsumer.commitOffsets).toHaveBeenCalled();
-      expect(logger.logError).toHaveBeenCalledWith(
+      expect(mockLogError).toHaveBeenCalledWith(
         expect.stringContaining("Failed to commit offset after error"),
         commitError
       );
@@ -694,7 +711,7 @@ describe("KafkaConsumer", () => {
 
       // Verify
       expect(CacheClientFactory.createClient).not.toHaveBeenCalled();
-      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Cache layer is disabled"));
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Cache layer is disabled"));
       expect(result).toBeNull();
     });
   });

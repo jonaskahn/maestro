@@ -2,24 +2,35 @@
  * Tests for the CacheClientFactory class
  */
 
+// Create mock functions first
+const mockLogWarning = jest.fn();
+const mockLogError = jest.fn();
+
+// Mock dependencies before requiring modules
+jest.mock("../../../src/implementations/cache/redis-cache-client", () => {
+  // Create a constructor function that can be instantiated with 'new'
+  const MockRedisCacheClient = jest.fn().mockImplementation(function (config) {
+    this.config = config;
+    this.implementation = config.implementation;
+  });
+
+  return MockRedisCacheClient;
+});
+
+jest.mock("../../../src/services/logger-service", () => ({
+  logWarning: mockLogWarning,
+  logError: mockLogError,
+}));
+
+// Now require the modules after setting up mocks
 const CacheClientFactory = require("../../../src/implementations/cache/cache-client-factory");
 const RedisCacheClient = require("../../../src/implementations/cache/redis-cache-client");
 const logger = require("../../../src/services/logger-service");
-
-// Mock dependencies
-jest.mock("../../../src/implementations/cache/redis-cache-client");
-jest.mock("../../../src/services/logger-service");
 
 describe("CacheClientFactory", () => {
   beforeEach(() => {
     // Clear all mocks before each test
     jest.clearAllMocks();
-
-    // Setup default mock implementation for RedisCacheClient
-    RedisCacheClient.mockImplementation(function (config) {
-      this.config = config;
-      this.implementation = config.implementation;
-    });
   });
 
   describe("createClient", () => {
@@ -28,7 +39,7 @@ describe("CacheClientFactory", () => {
         implementation: "redis",
         keyPrefix: "test_prefix",
         processingTtl: 5000,
-        sentTtl: 10000,
+        suppressionTtl: 10000,
       };
 
       const client = CacheClientFactory.createClient(config);
@@ -49,7 +60,7 @@ describe("CacheClientFactory", () => {
       const client = CacheClientFactory.createClient(config);
 
       expect(client).toBeDefined();
-      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Unsupported cache implementation"));
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Unsupported cache implementation"));
       expect(RedisCacheClient).toHaveBeenCalledWith(
         expect.objectContaining({
           implementation: "redis",
@@ -99,7 +110,8 @@ describe("CacheClientFactory", () => {
         keyPrefix: "test_prefix",
       };
 
-      RedisCacheClient.mockImplementation(() => {
+      // Override the mock implementation just for this test
+      RedisCacheClient.mockImplementationOnce(() => {
         throw new Error("Redis connection failed");
       });
 
@@ -107,7 +119,7 @@ describe("CacheClientFactory", () => {
         CacheClientFactory.createClient(config);
       }).toThrow("Redis cache client creation failed");
 
-      expect(logger.logError).toHaveBeenCalledWith("Failed to create Redis cache _client", expect.any(Error));
+      expect(mockLogError).toHaveBeenCalledWith("Failed to create Redis cache _client", expect.any(Error));
     });
 
     test("should attempt Redis fallback when other implementation fails", () => {
@@ -118,12 +130,12 @@ describe("CacheClientFactory", () => {
 
       // Mock the warning for unsupported implementation
       const mockRedisClient = { implementation: "redis" };
-      RedisCacheClient.mockImplementation(() => mockRedisClient);
+      RedisCacheClient.mockImplementationOnce(() => mockRedisClient);
 
       const client = CacheClientFactory.createClient(config);
 
       expect(client).toBe(mockRedisClient);
-      expect(logger.logWarning).toHaveBeenCalledWith(
+      expect(mockLogWarning).toHaveBeenCalledWith(
         "Unsupported cache implementation: memcached. Falling back to Redis."
       );
     });
@@ -146,19 +158,19 @@ describe("CacheClientFactory", () => {
           CacheClientFactory.createClient = originalCreateClient;
 
           // Now make Redis throw an error too
-          RedisCacheClient.mockImplementation(() => {
+          RedisCacheClient.mockImplementationOnce(() => {
             throw new Error("Redis connection failed");
           });
 
           // Simulate the error handling in the original code
-          logger.logWarning("Attempting fallback to Redis cache...");
+          mockLogWarning("Attempting fallback to Redis cache...");
           try {
             return CacheClientFactory.createClient({
               ...cfg,
               implementation: "redis",
             });
           } catch (fallbackError) {
-            logger.logError("Redis fallback also failed", fallbackError);
+            mockLogError("Redis fallback also failed", fallbackError);
             throw new Error(
               `Cache client creation failed: Memory implementation failed. Fallback to Redis also failed: Redis connection failed`
             );
@@ -173,8 +185,8 @@ describe("CacheClientFactory", () => {
         CacheClientFactory.createClient(config);
       }).toThrow(/Cache client creation failed.*Fallback to Redis also failed/);
 
-      expect(logger.logWarning).toHaveBeenCalledWith("Attempting fallback to Redis cache...");
-      expect(logger.logError).toHaveBeenCalledWith("Redis fallback also failed", expect.any(Error));
+      expect(mockLogWarning).toHaveBeenCalledWith("Attempting fallback to Redis cache...");
+      expect(mockLogError).toHaveBeenCalledWith("Redis fallback also failed", expect.any(Error));
 
       // Restore the original implementation
       CacheClientFactory.createClient = originalCreateClient;
@@ -187,7 +199,7 @@ describe("CacheClientFactory", () => {
         implementation: "redis",
         keyPrefix: "test_prefix",
         processingTtl: 5000,
-        sentTtl: 10000,
+        suppressionTtl: 10000,
       };
 
       expect(() => {
@@ -221,7 +233,7 @@ describe("CacheClientFactory", () => {
 
       CacheClientFactory.validateConfiguration(config);
 
-      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Unsupported cache implementation"));
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Unsupported cache implementation"));
     });
 
     test("should throw error for invalid processingTtl", () => {
@@ -246,9 +258,9 @@ describe("CacheClientFactory", () => {
       expect(() => {
         CacheClientFactory.validateConfiguration({
           keyPrefix: "test_prefix",
-          sentTtl: 0,
+          suppressionTtl: 0,
         });
-      }).toThrow("Cache sentTtl must be a positive integer");
+      }).toThrow("Cache suppressionTtl must be a positive integer");
     });
 
     test("should log warning for very high TTL values", () => {
@@ -259,7 +271,7 @@ describe("CacheClientFactory", () => {
 
       CacheClientFactory.validateConfiguration(config);
 
-      expect(logger.logWarning).toHaveBeenCalledWith(expect.stringContaining("Cache processingTtl is quite high"));
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Cache processingTtl is quite high"));
     });
 
     test("should throw error for invalid connectionOptions", () => {
@@ -307,7 +319,7 @@ describe("CacheClientFactory", () => {
       expect(config).toHaveProperty("implementation", "redis");
       expect(config).toHaveProperty("keyPrefix");
       expect(config).toHaveProperty("processingTtl");
-      expect(config).toHaveProperty("sentTtl");
+      expect(config).toHaveProperty("suppressionTtl");
       expect(config).toHaveProperty("connectionOptions");
       expect(config.connectionOptions).toHaveProperty("url");
     });

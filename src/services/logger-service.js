@@ -88,7 +88,7 @@ class LoggerService {
    */
   logInfo(message, metadata) {
     this.logger.info(
-      `${LOG_CATEGORIES.STATUS.INFO} ${message?.trim()} ${metadata || JSON.stringify(metadata, null, 2)}`
+      `${LOG_CATEGORIES.STATUS.INFO} ${message?.trim()} ${metadata ? JSON.stringify(metadata, null, 2) : ""}`
     );
   }
 
@@ -99,7 +99,7 @@ class LoggerService {
    */
   logDebug(message, metadata) {
     this.logger.debug(
-      `${LOG_CATEGORIES.STATUS.DEBUG} ${message?.trim()} ${metadata || JSON.stringify(metadata, null, 2)}`
+      `${LOG_CATEGORIES.STATUS.DEBUG} ${message?.trim()} ${metadata ? JSON.stringify(metadata, null, 2) : ""}`
     );
   }
 
@@ -110,7 +110,7 @@ class LoggerService {
    */
   logWarning(message, metadata) {
     this.logger.warn(
-      `${LOG_CATEGORIES.STATUS.WARNING} ${message?.trim()} ${metadata || JSON.stringify(metadata, null, 2)}`
+      `${LOG_CATEGORIES.STATUS.WARNING} ${message?.trim()} ${metadata ? JSON.stringify(metadata, null, 2) : ""}`
     );
   }
 
