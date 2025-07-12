@@ -7,14 +7,23 @@
  *
  * Kafka Consumer Implementation
  *
- * Provides specialized Kafka implementation of AbstractConsumer
- * with support for message consumption, deserialization, and batching.
+ * Provides Kafka-specific implementation of the AbstractConsumer interface.
+ * Handles Kafka message consumption, offset management, consumer group coordination,
+ * and message deserialization. Supports both auto-commit and manual offset commits,
+ * topic creation, and integration with the cache layer for message deduplication.
  */
 const AbstractConsumer = require("../../../abstracts/abstract-consumer");
 const KafkaManager = require("./kafka-manager");
 const CacheClientFactory = require("../../cache/cache-client-factory");
 const logger = require("../../../services/logger-service");
 
+/**
+ * Kafka Consumer
+ *
+ * Implements the AbstractConsumer interface for the Apache Kafka message broker.
+ * Manages consumer group lifecycle, message parsing, and offset management
+ * while providing standardized methods for message consumption and processing.
+ */
 class KafkaConsumer extends AbstractConsumer {
   _topicOptions;
   _groupId;
@@ -24,14 +33,23 @@ class KafkaConsumer extends AbstractConsumer {
   _consumer;
 
   /**
-   * Create a new Kafka consumer instance
+   * Creates a new Kafka consumer instance
+   *
    * @param {Object} config - Configuration object
    * @param {string} config.topic - Topic to consume from
-   * @param {string} config.groupId - Consumer group ID
-   * @param {Object} config.clientOptions - Kafka _client connection options
-   * @param {Object} config.consumerOptions - Kafka consumer specific options
-   * @param {boolean} [config.consumerOptions.fromBeginning=false] - Whether to consume from beginning
+   * @param {string} config.groupId - Consumer group ID for coordinated consumption
+   * @param {Object} [config.clientOptions] - Kafka client connection options
+   * @param {string} [config.clientOptions.brokers] - Comma-separated list of Kafka brokers
+   * @param {Object} [config.clientOptions.ssl] - SSL configuration options
+   * @param {Object} [config.clientOptions.sasl] - SASL authentication options
+   * @param {Object} [config.consumerOptions] - Kafka consumer specific options
+   * @param {boolean} [config.consumerOptions.fromBeginning=false] - Whether to consume from beginning of topic
    * @param {boolean} [config.consumerOptions.autoCommit=true] - Whether to auto-commit offsets
+   * @param {number} [config.consumerOptions.sessionTimeout] - Session timeout in ms
+   * @param {number} [config.consumerOptions.heartbeatInterval] - Heartbeat interval in ms
+   * @param {Object} [config.topicOptions] - Topic configuration options
+   * @param {boolean} [config.topicOptions.allowAutoTopicCreation] - Whether to create topic if it doesn't exist
+   * @param {Object} [config.cacheOptions] - Cache configuration for deduplication
    */
   constructor(config) {
     super(KafkaManager.standardizeConfig(config, "consumer"));
@@ -43,6 +61,11 @@ class KafkaConsumer extends AbstractConsumer {
     this._consumer = KafkaManager.createConsumer(null, this._clientOptions, this._consumerOptions);
   }
 
+  /**
+   * Creates a cache layer for message deduplication
+   * @param {Object} cacheOptions - Cache configuration options
+   * @returns {Object|null} Cache client instance or null if disabled
+   */
   _createCacheLayer(cacheOptions) {
     if (!cacheOptions) {
       logger.logWarning("⁉️Cache layer is disabled, _config is not yet defined");
@@ -52,13 +75,17 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   /**
-   * Get the broker type
-   * @returns {string} Broker type
+   * Gets the broker type identifier
+   * @returns {string} Broker type ('kafka')
    */
   getBrokerType() {
     return "kafka";
   }
 
+  /**
+   * Creates topic if it doesn't exist and auto-creation is enabled
+   * @returns {Promise<void>}
+   */
   async _createTopicIfAllowed() {
     if (await KafkaManager.isTopicExisted(this._admin, this._topic)) {
       return;
@@ -68,12 +95,20 @@ class KafkaConsumer extends AbstractConsumer {
     }
   }
 
+  /**
+   * Connects to Kafka broker and admin client
+   * @returns {Promise<void>}
+   */
   async _connectToMessageBroker() {
     await this._consumer.connect();
     await this._admin.connect();
     logger.logConnectionEvent("🔌 Kafka Consumer", "connected to Kafka broker");
   }
 
+  /**
+   * Disconnects from Kafka broker and admin client
+   * @returns {Promise<void>}
+   */
   async _disconnectFromMessageBroker() {
     if (this._consumer) {
       await this._consumer.disconnect();
@@ -86,6 +121,15 @@ class KafkaConsumer extends AbstractConsumer {
     logger.logConnectionEvent("Kafka Consumer", "disconnected from Kafka broker");
   }
 
+  /**
+   * Starts consuming messages from Kafka topic
+   *
+   * Sets up subscription to the topic and configures message handling with
+   * business logic processing and offset management.
+   *
+   * @param {Object} _options - Consumption options
+   * @returns {Promise<void>}
+   */
   async _startConsumingFromBroker(_options = {}) {
     await this._consumer.subscribe({
       topic: this._topic,
@@ -150,7 +194,11 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   /**
-   * Convert Kafka message to standardized format following STANDARDIZED_MESSAGE_INTERFACE
+   * Converts Kafka message to standardized format
+   *
+   * Extracts essential information from raw Kafka message format into a standardized
+   * message object that can be processed by the business logic handler.
+   *
    * @param {Object} kafkaMessage - Native Kafka message
    * @param {string} kafkaMessage.topic - The Kafka topic
    * @param {number} kafkaMessage.partition - The Kafka partition
@@ -175,11 +223,19 @@ class KafkaConsumer extends AbstractConsumer {
     return standardizeMessage;
   }
 
+  /**
+   * Stops message consumption from Kafka
+   * @returns {Promise<void>}
+   */
   async _stopConsumingFromBroker() {
     await this._consumer?.stop();
     logger.logInfo(`⏹️ Kafka consumer stopped for topic '${this._topic}'`);
   }
 
+  /**
+   * Gets consumer status information including Kafka-specific metrics
+   * @returns {Object} Status object with connection and configuration details
+   */
   getConfigStatus() {
     return {
       ...super.getConfigStatus(),

@@ -1,7 +1,8 @@
 /**
- * Order Consumer for Ecommerce Example
+ * Order Consumer
  *
- * Processes orders from Kafka and updates their status in the database.
+ * Handles the consumption and processing of order messages from Kafka.
+ * Extends the DefaultConsumer class to implement ecommerce-specific order processing logic.
  */
 
 const { DefaultConsumer } = require("../../../../src");
@@ -14,79 +15,93 @@ const SIMULATION_DELAYS = {
   ORDER_VALIDATION: 8_000,
 };
 
+/**
+ * OrderConsumer class
+ *
+ * Processes orders from Kafka and updates their status in the database.
+ * Extends DefaultConsumer to implement order-specific processing logic.
+ */
 class OrderConsumer extends DefaultConsumer {
   constructor(config = {}) {
     super(config);
-
-    this.stats = {
-      processedCount: 0,
-      failedCount: 0,
-      startTime: Date.now(),
-    };
   }
 
   /**
-   * Process an order
+   * Processes an order
+   *
    * @param {Object} orderData - Order data to process
    * @returns {Promise<Object>} Processing result
    */
   async process(orderData) {
     const orderId = this.extractOrderId(orderData);
-
-    try {
-      Logger.info(`Processing order ${orderId}`);
-
-      await this.validateOrder(orderData);
-      await this.processOrderSteps(orderData);
-
-      const result = this.createProcessingResult(orderData);
-      this.updateSuccessStats();
-
-      Logger.success(`Order ${orderId} processed successfully`);
-      return result;
-    } catch (error) {
-      this.handleProcessingError(orderId, error);
-      throw error;
-    }
+    await this.validateOrder(orderData);
+    await this.processOrderSteps(orderData);
+    return this.createProcessingResult(orderData);
   }
 
+  /**
+   * Gets unique identifier for an item
+   *
+   * @param {Object} orderData - The order data object
+   * @returns {string} The order's unique identifier
+   */
   getItemId(orderData) {
     return orderData?._id;
   }
 
+  /**
+   * Checks if an item has been processed
+   *
+   * @private
+   * @param {string} itemId - The item ID to check
+   * @returns {Promise<boolean>} True if the item has been processed
+   */
   async _isItemProcessed(itemId) {
-    try {
-      return await database.isOrderCompleted(itemId);
-    } catch (error) {
-      Logger.error(`Error checking order completion for ${itemId}`, error);
-      return false;
-    }
+    return await database.isOrderCompleted(itemId);
   }
 
+  /**
+   * Handles successful item processing
+   *
+   * @private
+   * @param {string} itemId - ID of the successfully processed item
+   * @returns {Promise<void>} - Resolves when the database is updated
+   */
   async _onItemProcessSuccess(itemId) {
-    try {
-      await database.markOrderAsCompleted(itemId);
-      this.updateSuccessStats();
-      Logger.success(`Order ${itemId} marked as completed`);
-    } catch (error) {
-      Logger.error(`Error updating order ${itemId}`, error);
-    }
+    await database.markOrderAsCompleted(itemId);
+    Logger.success(`Order ${itemId} marked as completed`);
   }
 
+  /**
+   * Handles failed item processing
+   *
+   * @private
+   * @param {string} itemId - ID of the failed item
+   * @param {Error} error - Error that caused the failure
+   * @returns {Promise<void>} - Resolves when the database is updated
+   */
   async _onItemProcessFailed(itemId, error) {
-    try {
-      await database.markOrderAsFailed(itemId, error?.message);
-      Logger.warn(`Order ${itemId} marked as failed: ${error?.message}`);
-    } catch (dbError) {
-      Logger.error(`Error marking order ${itemId} as failed`, dbError);
-    }
+    await database.markOrderAsFailed(itemId, error?.message);
+    Logger.warn(`Order ${itemId} marked as failed: ${error?.message}`);
   }
 
+  /**
+   * Extracts order ID from order object
+   *
+   * @param {Object} order - Order object
+   * @returns {string} Order ID
+   */
   extractOrderId(order) {
     return order.orderId || order._id?.toString();
   }
 
-  async validateOrder(order) {
+  /**
+   * Validates order data
+   *
+   * @param {Object} order - Order to validate
+   * @throws {Error} If the order is invalid
+   */
+  validateOrder(order) {
     if (!order.orderId && !order._id) {
       throw new Error("Order must have an ID");
     }
@@ -96,11 +111,24 @@ class OrderConsumer extends DefaultConsumer {
     }
   }
 
+  /**
+   * Processes the steps required to complete an order
+   *
+   * @param {Object} order - Order to process
+   * @returns {Promise<void>} - Resolves when processing is complete
+   */
   async processOrderSteps(order) {
     await this.simulateProcessingDelay();
     await this.updateOrderStatus(order, "processed");
   }
 
+  /**
+   * Updates order status in the database
+   *
+   * @param {Object} order - Order to update
+   * @param {string} status - New status
+   * @returns {Promise<void>} - Resolves when the database is updated
+   */
   async updateOrderStatus(order, status) {
     if (status === "completed" || status === "processed") {
       await database.markOrderAsCompleted(order._id);
@@ -109,10 +137,21 @@ class OrderConsumer extends DefaultConsumer {
     }
   }
 
+  /**
+   * Simulates processing delay for demonstration purposes
+   *
+   * @returns {Promise<void>} - Resolves after the delay
+   */
   simulateProcessingDelay() {
     return new Promise(resolve => setTimeout(resolve, SIMULATION_DELAYS.ORDER_VALIDATION));
   }
 
+  /**
+   * Creates processing result object
+   *
+   * @param {Object} order - Processed order
+   * @returns {Object} Processing result
+   */
   createProcessingResult(order) {
     return {
       orderId: this.extractOrderId(order),
@@ -120,33 +159,6 @@ class OrderConsumer extends DefaultConsumer {
       processedAt: new Date(),
       total: order.total,
       items: order.items?.length || 0,
-    };
-  }
-
-  updateSuccessStats() {
-    this.stats.processedCount++;
-  }
-
-  handleProcessingError(orderId, error) {
-    this.stats.failedCount++;
-    Logger.error(`Order processing failed for ${orderId}`, error);
-  }
-
-  /**
-   * Get processing statistics
-   * @returns {Object} Statistics about processed orders
-   */
-  getStats() {
-    const uptime = Date.now() - this.stats.startTime;
-    const total = this.stats.processedCount + this.stats.failedCount;
-    const successRate = total > 0 ? ((this.stats.processedCount / total) * 100).toFixed(2) : 0;
-
-    return {
-      processedCount: this.stats.processedCount,
-      failedCount: this.stats.failedCount,
-      total,
-      successRate: parseFloat(successRate),
-      uptime: Math.round(uptime / 1000),
     };
   }
 }

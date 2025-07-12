@@ -603,7 +603,7 @@ class AbstractConsumer {
   async #handleProcessingFailure(itemId, messageKey, error) {
     await this._onItemProcessFailed(itemId, error);
     this.metrics[METRICS_PROPERTIES.TOTAL_FAILED]++;
-    logger.logError(
+    logger.logWarning(
       `Failed to process message: ${itemId} (Key: ${messageKey}), but error will be ignored to throw`,
       error
     );

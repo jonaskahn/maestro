@@ -65,7 +65,6 @@ class MongoDatabase {
       this.collections.orders = this.db.collection(DB_CONFIG.collections.orders);
 
       this.isConnected = true;
-      Logger.success("Connected to MongoDB successfully");
     } catch (error) {
       Logger.error("Failed to connect to MongoDB", error);
       throw error;
@@ -117,7 +116,7 @@ class MongoDatabase {
 
       await this.initializeData();
     } catch (error) {
-      Logger.error("Failed to #initialize MongoDB schema", error);
+      Logger.error("Failed to initialize MongoDB schema", error);
       throw error;
     }
   }

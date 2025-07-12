@@ -1,7 +1,8 @@
 /**
- * Order Producer for Ecommerce Example
+ * Order Producer
  *
- * Produces order messages to Kafka from database records.
+ * Handles the production of order messages to Kafka from database records.
+ * Extends the DefaultProducer class to implement ecommerce-specific order processing logic.
  */
 
 const { DefaultProducer } = require("../../../../src");
@@ -25,23 +26,33 @@ const DEFAULT_RETRY_SETTINGS = {
   BACKOFF_MULTIPLIER: 2,
 };
 
+/**
+ * OrderProducer class
+ *
+ * Produces order messages to Kafka based on database records.
+ * Extends DefaultProducer to implement order-specific logic.
+ */
 class OrderProducer extends DefaultProducer {
   constructor(config) {
     super(config);
-    this.processedCount = 0;
-    this.failedCount = 0;
-    this.dbInitialized = false;
   }
 
   /**
-   * Initialize database connection
+   * Initializes database connection
+   *
+   * @returns {Promise<void>} - Resolves when the database is connected
    */
   async initializeDatabase() {
-    Logger.info("Initializing database connection");
     await database.connect();
     Logger.success("Database ready");
   }
 
+  /**
+   * Ensures the database is initialized
+   *
+   * @private
+   * @returns {Promise<void>} - Resolves when database is initialized
+   */
   async _ensureDatabaseInitialized() {
     if (!this.dbInitialized) {
       await this.initializeDatabase();
@@ -50,37 +61,22 @@ class OrderProducer extends DefaultProducer {
   }
 
   /**
-   * Connect and initialize database
+   * Connects to Kafka and initializes the database
+   *
+   * @returns {Promise<void>} - Resolves when connections are established
    */
   async connect() {
     await super.connect();
     await this._ensureDatabaseInitialized();
-    return true;
   }
 
   /**
-   * Get pending orders for processing
-   * @param {object} criteria - MongoDB query criteria
-   * @param {number} limit - Maximum number of orders to return
-   * @param {Array} excludedIds - List of order IDs to exclude
-   * @returns {Promise<Array>} Pending orders
-   */
-  async getPendingOrders(criteria, limit = 10, excludedIds = []) {
-    try {
-      if (!database.isConnected) {
-        await database.connect();
-      }
-
-      const orders = await database.getPendingOrders(criteria, limit, excludedIds);
-      return orders || [];
-    } catch (error) {
-      Logger.error("Failed to get pending orders", error);
-      return [];
-    }
-  }
-
-  /**
-   * Get next batch of items to process
+   * Gets the next batch of items to process
+   *
+   * @param {Object} criteria - Query criteria for filtering orders
+   * @param {number} limit - Maximum number of items to retrieve
+   * @param {Array<string>} excludedIds - IDs to exclude from the query
+   * @returns {Promise<Array>} List of pending orders
    */
   async getNextItems(criteria, limit, excludedIds) {
     await this._ensureDatabaseInitialized();
@@ -103,44 +99,38 @@ class OrderProducer extends DefaultProducer {
     return pendingOrders;
   }
 
-  getItemId(item) {
-    return item._id || item.orderId;
-  }
-
-  async _onItemProcessSuccess(orderId) {
+  /**
+   * Gets pending orders for processing from the database
+   *
+   * @param {object} criteria - MongoDB query criteria
+   * @param {number} limit - Maximum number of orders to return
+   * @param {Array} excludedIds - List of order IDs to exclude
+   * @returns {Promise<Array>} Pending orders
+   */
+  async getPendingOrders(criteria, limit = 10, excludedIds = []) {
     try {
-      await database.collections.orders.updateOne(
-        { _id: orderId },
-        {
-          $set: {
-            status: "sent",
-            sentAt: new Date(),
-            updatedAt: new Date(),
-          },
-        }
-      );
-
-      this.processedCount++;
-      Logger.success(`Marked order ${orderId} as sent`);
+      const orders = await database.getPendingOrders(criteria, limit, excludedIds);
+      return orders || [];
     } catch (error) {
-      Logger.error(`Failed to mark order ${orderId} as sent`, error);
-      throw error;
-    }
-  }
-
-  async _onItemProcessFailed(orderId, errorMessage) {
-    try {
-      await database.markOrderAsFailed(orderId, errorMessage);
-      this.failedCount++;
-      Logger.warn(`Marked order ${orderId} as failed: ${errorMessage}`);
-    } catch (error) {
-      Logger.error(`Failed to mark order ${orderId} as failed`, error);
-      throw error;
+      Logger.error("Failed to get pending orders", error);
+      return [];
     }
   }
 
   /**
-   * Cleanup database connection
+   * Gets unique identifier for an item
+   *
+   * @param {Object} item - The item object
+   * @returns {string} The item's unique identifier
+   */
+  getItemId(item) {
+    return item._id || item.orderId;
+  }
+
+  /**
+   * Cleans up database connection
+   *
+   * @returns {Promise<void>} - Resolves when cleanup is complete
    */
   async cleanup() {
     if (database.isConnected) {
@@ -148,30 +138,6 @@ class OrderProducer extends DefaultProducer {
       await database.disconnect();
       Logger.success("Database disconnected");
     }
-  }
-
-  /**
-   * Get production statistics
-   * @returns {Object} Statistics about produced orders
-   */
-  getStats() {
-    const totalAttempted = this.processedCount + this.failedCount;
-    const successRate = totalAttempted > 0 ? ((this.processedCount / totalAttempted) * 100).toFixed(1) : "0.0";
-
-    return {
-      processedCount: this.processedCount,
-      failedCount: this.failedCount,
-      totalAttempted,
-      successRate: parseFloat(successRate),
-    };
-  }
-
-  /**
-   * Reset statistics
-   */
-  resetStats() {
-    this.processedCount = 0;
-    this.failedCount = 0;
   }
 }
 

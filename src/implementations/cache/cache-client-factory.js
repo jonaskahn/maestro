@@ -5,21 +5,37 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Cache Factory for creating cache layer implementations
+ * Cache Client Factory
  *
- * Supports Redis, Memcached, in-memory cache with fallback mechanisms and configuration validation.
+ * Factory service for creating and configuring appropriate cache implementations.
+ * Supports multiple cache providers with fallback mechanisms, environment-based configuration,
+ * and validation to ensure proper cache setup. Currently supports Redis with planned
+ * implementations for Memcached and in-memory caching.
  */
 const logger = require("../../services/logger-service");
 
+/**
+ * Cache Client Factory
+ *
+ * Static factory class that creates and configures cache implementations
+ * based on provided configuration or environment variables. Handles provider
+ * selection, configuration validation, and fallback strategies when primary
+ * cache providers are unavailable.
+ */
 class CacheClientFactory {
   /**
-   * Creates a cache _client instance based on configuration
+   * Creates a cache client instance based on configuration
+   *
+   * Validates configuration, determines appropriate implementation,
+   * and instantiates the corresponding cache client. Implements fallback
+   * to Redis if specified implementation fails or is unsupported.
+   *
    * @param {Object} config - Cache configuration object
-   * @param {string} config.implementation - Cache implementation type ('redis', 'memcached', 'memory')
+   * @param {string} [config.implementation] - Cache implementation type ('redis', 'memcached', 'memory')
    * @param {string} config.keyPrefix - Key prefix for organization
-   * @param {number} config.processingTtl - Processing key TTL in milliseconds
-   * @param {number} config.sentTtl - Sent message TTL in milliseconds
-   * @param {Object} config.connectionOptions - Implementation-specific connection options
+   * @param {number} [config.processingTtl] - Processing key TTL in milliseconds
+   * @param {number} [config.suppressionTtl] - Suppression key TTL in milliseconds
+   * @param {Object} [config.connectionOptions] - Implementation-specific connection options
    * @returns {AbstractCache} Cache layer instance
    * @throws {Error} When cache creation fails or configuration is invalid
    */
@@ -62,7 +78,7 @@ class CacheClientFactory {
   }
 
   /**
-   * Resolve cache implementation from _config and environment
+   * Resolves cache implementation from config and environment
    * @param {Object} config - Configuration object
    * @returns {string} Implementation type
    * @private
@@ -72,7 +88,7 @@ class CacheClientFactory {
   }
 
   /**
-   * Create Redis cache _client
+   * Creates Redis cache client
    * @param {Object} config - Configuration object
    * @returns {RedisCacheClient} Redis cache layer instance
    * @private
@@ -92,7 +108,7 @@ class CacheClientFactory {
   }
 
   /**
-   * Create Memcached _client
+   * Creates Memcached client
    * @param {Object} config - Configuration object
    * @returns {MemcachedCacheClient} Memcached cache layer instance
    * @private
@@ -112,7 +128,7 @@ class CacheClientFactory {
   }
 
   /**
-   * Create Memory cache _client
+   * Creates Memory cache client
    * @param {Object} config - Configuration object
    * @returns {MemoryCacheClient} Memory cache layer instance
    * @private
@@ -136,8 +152,13 @@ class CacheClientFactory {
   }
 
   /**
-   * Validate cache configuration against required fields and constraints
-   * @param {Object} config Configuration to validate
+   * Validates cache configuration against required fields and constraints
+   *
+   * Ensures the configuration has all required fields, validates TTL values,
+   * and checks for supported implementations. Issues warnings for unsupported
+   * implementations but doesn't throw errors to allow fallback behavior.
+   *
+   * @param {Object} config - Configuration to validate
    * @throws {Error} If configuration is invalid
    */
   static validateConfiguration(config) {
@@ -167,8 +188,8 @@ class CacheClientFactory {
       this._validateTtl(config.processingTtl, "processingTtl");
     }
 
-    if (config.sentTtl !== undefined) {
-      this._validateTtl(config.sentTtl, "sentTtl");
+    if (config.suppressionTtl !== undefined) {
+      this._validateTtl(config.suppressionTtl, "suppressionTtl");
     }
 
     if (config.connectionOptions && typeof config.connectionOptions !== "object") {
@@ -177,7 +198,7 @@ class CacheClientFactory {
   }
 
   /**
-   * Validate TTL value
+   * Validates TTL value for proper range and type
    * @param {any} ttl - TTL value to validate
    * @param {string} fieldName - Name of the field for error messages
    * @private
@@ -195,7 +216,7 @@ class CacheClientFactory {
   }
 
   /**
-   * Get list of supported cache implementations
+   * Gets list of supported cache implementations
    * @returns {Array<string>} Array of supported implementation names
    */
   static getSupportedImplementations() {
@@ -203,8 +224,8 @@ class CacheClientFactory {
   }
 
   /**
-   * Check if implementation is supported
-   * @param {string} implementation Implementation name to check
+   * Checks if implementation is supported
+   * @param {string} implementation - Implementation name to check
    * @returns {boolean} True if implementation is supported
    */
   static isImplementationSupported(implementation) {
@@ -216,15 +237,19 @@ class CacheClientFactory {
   }
 
   /**
-   * Get default configuration for implementation
-   * @param {string} implementation Implementation type
+   * Gets default configuration for specified implementation
+   *
+   * Provides sensible defaults for each supported cache implementation,
+   * including key prefixes, TTLs, and connection options.
+   *
+   * @param {string} implementation - Implementation type
    * @returns {Object} Default configuration object
    */
   static getDefaultConfig(implementation = "redis") {
     const baseConfig = {
       keyPrefix: "MO_DEFAULT",
       processingTtl: 10 * 1000,
-      sentTtl: 20 * 1000,
+      suppressionTtl: 20 * 1000,
       retryOptions: {
         retries: 3,
         retryDelay: 1000,

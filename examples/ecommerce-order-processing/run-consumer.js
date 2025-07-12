@@ -2,13 +2,23 @@
  * Order Consumer Runner
  *
  * Entry point for the order consumer service.
+ * Manages the lifecycle of the consumer service, including startup, shutdown, and database connections.
  */
 
 const { OrderConsumer } = require("./src/broker");
 const database = require("./src/database/mongodb-client");
 const Logger = require("./src/utils/logger");
 
+/**
+ * ConsumerDaemon class
+ *
+ * Manages the order consumer service as a long-running daemon process.
+ * Handles consumer lifecycle, database connections, and graceful shutdown.
+ */
 class ConsumerDaemon {
+  /**
+   * Creates a new consumer daemon instance
+   */
   constructor() {
     this.consumer = new OrderConsumer({
       topic: "ecommerce-orders",
@@ -19,6 +29,11 @@ class ConsumerDaemon {
     });
   }
 
+  /**
+   * Starts the consumer service
+   *
+   * @returns {Promise<void>} - Resolves when the service is started
+   */
   async start() {
     try {
       await this.initializeDatabase();
@@ -36,10 +51,18 @@ class ConsumerDaemon {
     }
   }
 
+  /**
+   * Initializes the database connection
+   *
+   * @returns {Promise<void>} - Resolves when the database is connected
+   */
   async initializeDatabase() {
     await database.connect();
   }
 
+  /**
+   * Sets up signal handlers for graceful shutdown
+   */
   setupGracefulShutdown() {
     const signals = ["SIGTERM", "SIGINT", "SIGUSR2"];
 
@@ -52,6 +75,11 @@ class ConsumerDaemon {
     });
   }
 
+  /**
+   * Cleans up resources before shutdown
+   *
+   * @returns {Promise<void>} - Resolves when cleanup is complete
+   */
   async cleanup() {
     try {
       if (this.consumer) {
@@ -68,6 +96,11 @@ class ConsumerDaemon {
   }
 }
 
+/**
+ * Main application entry point
+ *
+ * @returns {Promise<void>} - Resolves when the application is started
+ */
 async function main() {
   try {
     require("dotenv").config();

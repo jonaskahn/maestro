@@ -1,5 +1,8 @@
 /**
- * Broker Components for Ecommerce Order Processing Example
+ * Broker Components Export
+ *
+ * Exports the OrderConsumer and OrderProducer components for the ecommerce order processing example.
+ * These components handle the message queue communication for order processing.
  */
 
 const OrderConsumer = require("./consumer");

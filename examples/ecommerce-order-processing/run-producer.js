@@ -2,13 +2,23 @@
  * Order Producer Runner
  *
  * Entry point for the order producer service with cron scheduling.
+ * Manages the lifecycle of the producer service, including startup, shutdown, and periodic job execution.
  */
 
 const cron = require("node-cron");
 const { OrderProducer } = require("./src/broker");
 const Logger = require("./src/utils/logger");
 
+/**
+ * ProducerCronjob class
+ *
+ * Manages scheduled order production jobs using cron scheduling.
+ * Handles producer lifecycle, job execution, and graceful shutdown.
+ */
 class ProducerCronjob {
+  /**
+   * Creates a new producer cronjob instance
+   */
   constructor() {
     this.isJobRunning = false;
     this.task = null;
@@ -22,13 +32,16 @@ class ProducerCronjob {
     });
   }
 
+  /**
+   * Starts the producer service and cron job
+   *
+   * @returns {Promise<void>} - Resolves when the service is started
+   */
   async start() {
     try {
       await this.producer.connect();
       await this.startCronjob();
       this.setupGracefulShutdown();
-
-      Logger.success("Producer cronjob started successfully");
     } catch (error) {
       Logger.error("Failed to start producer cronjob", error);
       await this.cleanupResources();
@@ -36,6 +49,11 @@ class ProducerCronjob {
     }
   }
 
+  /**
+   * Starts the cron job for scheduled order processing
+   *
+   * @returns {Promise<void>} - Resolves when the cron job is started
+   */
   async startCronjob() {
     const cronExpression = "*/1 * * * *";
     const allowImmediateExecution = true;
@@ -57,6 +75,11 @@ class ProducerCronjob {
     this.task.start();
   }
 
+  /**
+   * Runs a single producer job iteration
+   *
+   * @returns {Promise<void>} - Resolves when the job completes
+   */
   async runProducerJob() {
     if (this.isJobRunning) {
       return;
@@ -74,6 +97,9 @@ class ProducerCronjob {
     }
   }
 
+  /**
+   * Sets up signal handlers for graceful shutdown
+   */
   setupGracefulShutdown() {
     const signals = ["SIGTERM", "SIGINT", "SIGUSR2"];
 
@@ -91,6 +117,11 @@ class ProducerCronjob {
     });
   }
 
+  /**
+   * Cleans up resources before shutdown
+   *
+   * @returns {Promise<void>} - Resolves when cleanup is complete
+   */
   async cleanupResources() {
     const cleanupTasks = [];
 
@@ -103,6 +134,11 @@ class ProducerCronjob {
   }
 }
 
+/**
+ * Main application entry point
+ *
+ * @returns {Promise<void>} - Resolves when the application is started
+ */
 async function main() {
   try {
     require("dotenv").config();

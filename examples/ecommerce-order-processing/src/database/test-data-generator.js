@@ -1,7 +1,8 @@
 /**
  * Test Data Generator
  *
- * Creates realistic test order data for the ecommerce application.
+ * Provides utilities for generating realistic test order data for the ecommerce application.
+ * Creates orders with random but realistic properties for testing and development.
  */
 
 const { ObjectId } = require("mongodb");
@@ -77,11 +78,24 @@ const PRODUCT_CATALOG = [
   },
 ];
 
+/**
+ * TestDataGenerator class
+ *
+ * Generates realistic test data for the ecommerce order processing system.
+ */
 class TestDataGenerator {
+  /**
+   * Creates a new test data generator
+   */
   constructor() {
     this.orderCounter = 0;
   }
 
+  /**
+   * Generates a single random order
+   *
+   * @returns {Object} A randomly generated order
+   */
   generateOrder() {
     const orderId = this.generateOrderId();
     const orderType = this.selectOrderType();
@@ -107,6 +121,12 @@ class TestDataGenerator {
     };
   }
 
+  /**
+   * Generates a batch of random orders
+   *
+   * @param {number} count - Number of orders to generate
+   * @returns {Array<Object>} Array of generated orders
+   */
   generateBatch(count) {
     const orders = [];
     for (let i = 0; i < count; i++) {
@@ -115,10 +135,20 @@ class TestDataGenerator {
     return orders;
   }
 
+  /**
+   * Generates a unique order ID
+   *
+   * @returns {string} Unique order ID
+   */
   generateOrderId() {
     return `ORD-${Date.now()}-${++this.orderCounter}`;
   }
 
+  /**
+   * Generates a random customer
+   *
+   * @returns {Object} Customer object with id, name, and email
+   */
   generateCustomer() {
     const firstName = this.selectRandom(CUSTOMER_NAMES.FIRST_NAMES);
     const lastName = this.selectRandom(CUSTOMER_NAMES.LAST_NAMES);
@@ -130,6 +160,11 @@ class TestDataGenerator {
     };
   }
 
+  /**
+   * Generates random order items
+   *
+   * @returns {Array<Object>} Array of order items
+   */
   generateOrderItems() {
     const itemCount = Math.floor(Math.random() * 4) + 1;
     const items = [];
@@ -155,6 +190,11 @@ class TestDataGenerator {
     return items;
   }
 
+  /**
+   * Selects a random order type based on weighted distribution
+   *
+   * @returns {Object} Selected order type
+   */
   selectOrderType() {
     const random = Math.random();
     let cumulativeWeight = 0;
@@ -169,22 +209,47 @@ class TestDataGenerator {
     return ORDER_TYPES[0];
   }
 
+  /**
+   * Generates a random email for a customer
+   *
+   * @param {string} firstName - Customer's first name
+   * @param {string} lastName - Customer's last name
+   * @returns {string} Generated email address
+   */
   generateEmail(firstName, lastName) {
     const domains = ["gmail.com", "yahoo.com", "outlook.com", "company.com"];
     const domain = this.selectRandom(domains);
     return `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${domain}`;
   }
 
+  /**
+   * Calculates the total price of an order
+   *
+   * @param {Array<Object>} items - Order items
+   * @returns {number} Total price
+   */
   calculateTotal(items) {
     return items.reduce((total, item) => {
       return total + item.price * item.quantity;
     }, 0);
   }
 
+  /**
+   * Determines the priority of an order based on its type
+   *
+   * @param {Object} orderType - Order type object
+   * @returns {string} Priority level (high or normal)
+   */
   determinePriority(orderType) {
     return orderType.type === "priority" ? "high" : "normal";
   }
 
+  /**
+   * Selects a random element from an array
+   *
+   * @param {Array} array - Array to select from
+   * @returns {*} Randomly selected element
+   */
   selectRandom(array) {
     return array[Math.floor(Math.random() * array.length)];
   }

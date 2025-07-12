@@ -5,20 +5,45 @@
  * This source code is licensed under the MIT License found in the
  * LICENSE file in the root directory of this source tree.
  *
- * Redis Cache Layer Implementation
+ * Redis Cache Implementation
  *
- * Concrete implementation of AbstractCache using Redis as the backend
+ * Concrete implementation of AbstractCache using Redis as the backend.
+ * Provides Redis-specific methods for key-value operations, TTL management,
+ * and pattern-based key scanning with standardized error handling and logging.
+ * Supports Redis connection pooling, retry strategies, and reconnection logic.
  */
 const AbstractCache = require("../../abstracts/abstract-cache");
 const redis = require("redis");
 const logger = require("../../services/logger-service");
 
+/**
+ * Redis Cache Client
+ *
+ * Implements the AbstractCache interface using Redis as the backing store.
+ * Handles connection management, retry strategies, and provides Redis-specific
+ * implementations of the cache operations defined in the abstract class.
+ */
 class RedisCacheClient extends AbstractCache {
+  /**
+   * Creates a new Redis cache client instance
+   *
+   * @param {Object} config - Cache configuration object
+   * @param {string} config.keyPrefix - Required prefix for all cache keys
+   * @param {Object} [config.connectionOptions] - Redis-specific connection options
+   * @param {string} [config.connectionOptions.url] - Redis connection URL
+   * @param {string} [config.connectionOptions.password] - Redis password
+   * @param {number} [config.processingTtl] - TTL for processing state keys
+   * @param {number} [config.suppressionTtl] - TTL for suppression keys
+   */
   constructor(config) {
     super(config);
     this._client = this.#createRedisClient();
   }
 
+  /**
+   * Creates a Redis client with configured options
+   * @returns {Object} Redis client instance
+   */
   #createRedisClient() {
     const connectionOptions = this.config.connectionOptions || {};
 
@@ -38,6 +63,10 @@ class RedisCacheClient extends AbstractCache {
     return client;
   }
 
+  /**
+   * Creates retry strategy for Redis client
+   * @returns {Function} Retry strategy callback
+   */
   #createRetryStrategy() {
     const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
     const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
@@ -55,6 +84,10 @@ class RedisCacheClient extends AbstractCache {
     };
   }
 
+  /**
+   * Creates reconnection strategy for Redis socket
+   * @returns {Function} Reconnection strategy callback
+   */
   #createReconnectionStrategy() {
     const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
     const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
@@ -72,6 +105,10 @@ class RedisCacheClient extends AbstractCache {
     };
   }
 
+  /**
+   * Attaches event handlers to Redis client
+   * @param {Object} client - Redis client instance
+   */
   #attachEventHandlers(client) {
     client.on("error", error => {
       logger.logError("❌ Redis client error", error);
@@ -94,16 +131,28 @@ class RedisCacheClient extends AbstractCache {
     });
   }
 
+  /**
+   * Checks if a Redis connection already exists
+   * @returns {boolean} True if connection exists
+   */
   _checkExistingConnection() {
     return this._client && this._client.isOpen;
   }
 
+  /**
+   * Connects to Redis server
+   * @returns {Promise<void>}
+   */
   async _connectTo() {
     if (!this._client.isOpen) {
       await this._client.connect();
     }
   }
 
+  /**
+   * Disconnects from Redis server
+   * @returns {Promise<void>}
+   */
   async _disconnectFrom() {
     if (this._client.isOpen) {
       await this._client.disconnect();
@@ -111,7 +160,7 @@ class RedisCacheClient extends AbstractCache {
   }
 
   /**
-   * Set a value in the cache with optional TTL
+   * Sets a value in Redis with optional TTL
    * @param {string} key - Cache key
    * @param {any} value - Value to store
    * @param {number} ttlMs - Time-to-live in milliseconds
@@ -129,22 +178,37 @@ class RedisCacheClient extends AbstractCache {
     return true;
   }
 
+  /**
+   * Gets a value from Redis
+   * @param {string} key - Cache key
+   * @returns {Promise<any>} Retrieved value or null
+   */
   async _getKeyValue(key) {
     return await this._client.get(key);
   }
 
+  /**
+   * Deletes a key from Redis
+   * @param {string} key - Cache key
+   * @returns {Promise<boolean>} True if key was deleted
+   */
   async _deleteKey(key) {
     return await this._client.del(key);
   }
 
+  /**
+   * Checks if key exists in Redis
+   * @param {string} key - Cache key
+   * @returns {Promise<boolean>} True if key exists
+   */
   async _checkKeyExists(key) {
     return await this._client.exists(key);
   }
 
   /**
-   * Set expiry for existing key (Redis expects seconds, we convert from milliseconds)
+   * Sets expiry for existing Redis key (converts from milliseconds to seconds)
    * @param {string} key - Cache key
-   * @param {number} ttlMs - Time-to-live in milliseconds (converted to seconds for Redis)
+   * @param {number} ttlMs - Time-to-live in milliseconds
    * @returns {Promise<boolean>} True if expiry was set
    */
   async _setKeyExpiry(key, ttlMs) {
@@ -152,6 +216,11 @@ class RedisCacheClient extends AbstractCache {
     return await this._client.expire(key, ttlSeconds);
   }
 
+  /**
+   * Finds keys matching a pattern using Redis scan
+   * @param {string} pattern - Pattern to match
+   * @returns {Promise<string[]>} Array of matching keys
+   */
   async _findKeysByPattern(pattern) {
     try {
       const sentKeys = [];
@@ -174,10 +243,10 @@ class RedisCacheClient extends AbstractCache {
   }
 
   /**
-   * Set key with TTL if not exists (Redis expects seconds, we convert from milliseconds)
+   * Sets a key with TTL only if it doesn't exist (atomic NX operation)
    * @param {string} key - Cache key
    * @param {any} value - Value to store
-   * @param {number} ttlMs - Time-to-live in milliseconds (converted to seconds for Redis)
+   * @param {number} ttlMs - Time-to-live in milliseconds
    * @returns {Promise<boolean>} True if key was set
    */
   async _setKeyIfNotExists(key, value, ttlMs) {
