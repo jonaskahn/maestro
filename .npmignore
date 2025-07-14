@@ -1,0 +1,77 @@
+# Development files
+.git/
+.github/
+.vscode/
+.idea/
+
+# Environment and config
+.env
+.env.*
+.eslintrc*
+.prettierrc*
+nodemon.json
+
+# Dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Build artifacts
+dist/
+build/
+coverage/
+.nyc_output/
+
+# Testing
+test/
+tests/
+*.test.js
+*.spec.js
+__tests__/
+
+# Examples (keep lightweight)
+examples/ecommerce-order-processing/node_modules/
+examples/ecommerce-order-processing/package-lock.json
+examples/ecommerce-order-processing/.env*
+
+# Documentation that's not needed in package
+docs/
+CONTRIBUTING.md
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store
+Thumbs.db
+
+# Logs
+logs/
+*.log
+
+# Docker and infrastructure
+compose.yaml
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+
+# Development files
+.editorconfig
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+*.swp
+*.swo
+*~
+
+# Build and temporary files
+tmp/
+temp/
+
+# Documentation source files (if any)
+docs/
+
+# Other
+index.html 
