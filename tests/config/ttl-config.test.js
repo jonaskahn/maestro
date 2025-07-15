@@ -1,33 +1,33 @@
 /**
-      * @jest-environment node
-      */
+ * @jest-environment node
+ */
 
 const mockLogWarning = jest.fn();
 const mockLogInfo = jest.fn();
 const mockLogDebug = jest.fn();
-      jest.mock("../../src/services/logger-service", () => ({
-      logWarning: mockLogWarning,
-      logInfo: mockLogInfo,
-      logDebug: mockLogDebug,
+jest.mock("../../src/services/logger-service", () => ({
+  logWarning: mockLogWarning,
+  logInfo: mockLogInfo,
+  logDebug: mockLogDebug,
 }));
-      // Store the original env variables
-      let originalEnv;
+// Store the original env variables
+let originalEnv;
 
 describe("TtlConfig", () => {
-      beforeEach(() => {
-      jest.clearAllMocks();
-      // Store original env and reset for tests
-      originalEnv = { ...process.env };
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Store original env and reset for tests
+    originalEnv = { ...process.env };
   });
 
   afterEach(() => {
-      // Restore original env variables
-      process.env = originalEnv;
+    // Restore original env variables
+    process.env = originalEnv;
   });
 
   describe("getPrimaryTTL", () => {
-      test("should return default value when no env variable is set", () => {
-        // Arrange
+    test("should return default value when no env variable is set", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act
@@ -37,8 +37,8 @@ describe("TtlConfig", () => {
       expect(delayBaseTimeout).toBe(0);
     });
 
-      test("should return value from environment variable when set", () => {
-        // Arrange
+    test("should return value from environment variable when set", () => {
+      // Arrange
       process.env.MO_DELAY_BASE_TIMEOUT_MS = "5000";
       const TtlConfig = require("../../src/config/ttl-config");
 
@@ -49,8 +49,8 @@ describe("TtlConfig", () => {
       expect(delayBaseTimeout).toBe(5000);
     });
 
-      test("should use default when env variable is not a valid number", () => {
-        // Arrange
+    test("should use default when env variable is not a valid number", () => {
+      // Arrange
       process.env.MO_DELAY_BASE_TIMEOUT_MS = "invalid";
       const TtlConfig = require("../../src/config/ttl-config");
 
@@ -62,8 +62,8 @@ describe("TtlConfig", () => {
       expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Invalid environment value"));
     });
 
-      test("should throw error for unknown primary TTL key", () => {
-        // Arrange
+    test("should throw error for unknown primary TTL key", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act & Assert
@@ -72,8 +72,8 @@ describe("TtlConfig", () => {
   });
 
   describe("getDerivedTTL", () => {
-      test("should calculate derived value when no env variable is set", () => {
-        // Arrange
+    test("should calculate derived value when no env variable is set", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
       const derivationFn = jest.fn().mockReturnValue(15000);
 
@@ -85,8 +85,8 @@ describe("TtlConfig", () => {
       expect(derivedValue).toBe(15000);
     });
 
-      test("should use environment variable value when available", () => {
-        // Arrange
+    test("should use environment variable value when available", () => {
+      // Arrange
       process.env.MO_DISTRIBUTED_LOCK_TTL_MS = "20000";
       const TtlConfig = require("../../src/config/ttl-config");
       const derivationFn = jest.fn().mockReturnValue(15000);
@@ -99,8 +99,8 @@ describe("TtlConfig", () => {
       expect(derivedValue).toBe(20000);
     });
 
-      test("should use calculated value when env variable is invalid", () => {
-        // Arrange
+    test("should use calculated value when env variable is invalid", () => {
+      // Arrange
       process.env.MO_DISTRIBUTED_LOCK_TTL_MS = "invalid";
       const TtlConfig = require("../../src/config/ttl-config");
       const derivationFn = jest.fn().mockReturnValue(15000);
@@ -116,8 +116,8 @@ describe("TtlConfig", () => {
   });
 
   describe("getAllTtlValues", () => {
-      test("should return both primary and derived TTL values", () => {
-        // Arrange
+    test("should return both primary and derived TTL values", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act
@@ -131,8 +131,8 @@ describe("TtlConfig", () => {
       expect(allValues.KAFKA_CONNECTION_TIMEOUT).toBeDefined();
     });
 
-      test("should accept overrides for specific values", () => {
-        // Arrange
+    test("should accept overrides for specific values", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
       const overrides = {
         DELAY_BASE_TIMEOUT_MS: 10000,
@@ -147,8 +147,8 @@ describe("TtlConfig", () => {
       expect(allValues.DISTRIBUTED_LOCK_TTL).toBe(60000);
     });
 
-      test("should validate TTL relationships", () => {
-        // Arrange
+    test("should validate TTL relationships", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
       jest.spyOn(TtlConfig, "validateTTLRelationships");
 
@@ -161,8 +161,8 @@ describe("TtlConfig", () => {
   });
 
   describe("getSpecificConfigs", () => {
-      test("should return lock configuration", () => {
-        // Arrange
+    test("should return lock configuration", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act
@@ -175,8 +175,8 @@ describe("TtlConfig", () => {
       expect(lockConfig.refreshInterval).toBeDefined();
     });
 
-      test("should return topic configuration", () => {
-        // Arrange
+    test("should return topic configuration", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act
@@ -187,8 +187,8 @@ describe("TtlConfig", () => {
       expect(topicConfig.suppressionTtl).toBeDefined();
     });
 
-      test("should return backpressure configuration", () => {
-        // Arrange
+    test("should return backpressure configuration", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act
@@ -201,8 +201,8 @@ describe("TtlConfig", () => {
       expect(backpressureConfig.backoffMaxDelay).toBeDefined();
     });
 
-      test("should return kafka configuration", () => {
-        // Arrange
+    test("should return kafka configuration", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act
@@ -215,8 +215,8 @@ describe("TtlConfig", () => {
   });
 
   describe("_getEnvValue", () => {
-      test("should return env value when available", () => {
-        // Arrange
+    test("should return env value when available", () => {
+      // Arrange
       process.env.TEST_ENV_VALUE = "test-value";
       const TtlConfig = require("../../src/config/ttl-config");
 
@@ -227,8 +227,8 @@ describe("TtlConfig", () => {
       expect(value).toBe("test-value");
     });
 
-      test("should return first found env value", () => {
-        // Arrange
+    test("should return first found env value", () => {
+      // Arrange
       process.env.SECOND_ENV_VALUE = "second-value";
       const TtlConfig = require("../../src/config/ttl-config");
 
@@ -239,8 +239,8 @@ describe("TtlConfig", () => {
       expect(value).toBe("second-value");
     });
 
-      test("should return null when no env value is found", () => {
-        // Arrange
+    test("should return null when no env value is found", () => {
+      // Arrange
       const TtlConfig = require("../../src/config/ttl-config");
 
       // Act
