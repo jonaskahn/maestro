@@ -156,7 +156,7 @@ class KafkaProducer extends AbstractProducer {
    * @returns {Array<Object>} Array of Kafka formatted messages
    */
   _createBrokerMessages(items) {
-    return KafkaManager.createMessages(items, this.getMessageType());
+    return KafkaManager.createMessages(items, this.getMessageType(), { key: this.getItemId });
   }
 
   /**
@@ -170,22 +170,12 @@ class KafkaProducer extends AbstractProducer {
    * @returns {Promise<Object>} Result object with send status and details
    */
   async _sendMessagesToBroker(messages, _options) {
-    const sendOptions = {
-      acks: this._producerOptions.acks,
-      timeout: this._producerOptions.timeout,
-      compression: this._producerOptions.compression,
-    };
-
     const kafkaMessage = {
       topic: this._topic,
       messages,
-      acks: sendOptions.acks,
-      timeout: sendOptions.timeout,
+      ...this._producerOptions,
+      ..._options,
     };
-
-    if (sendOptions.getCompressionType) {
-      kafkaMessage.compression = sendOptions.getCompressionType;
-    }
 
     try {
       const result = await this._producer.send(kafkaMessage);

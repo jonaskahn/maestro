@@ -7,26 +7,14 @@ const DistributedLockService = require("../../src/services/distributed-lock-serv
 const LoggerService = require("../../src/services/logger-service");
 
 describe("Services Module Exports", () => {
-  test("should export DistributedLockService", () => {
-    // Given: The services module is imported
-    // When: Accessing the DistributedLockService export
-    // Then: It should be defined and match the DistributedLockService implementation
-    expect(servicesModule.DistributedLockService).toBeDefined();
+  test("Given The services module is imported When Accessing the DistributedLockService export Then It should be defined and match the DistributedLockService implementation", () => {expect(servicesModule.DistributedLockService).toBeDefined();
     expect(servicesModule.DistributedLockService).toBe(DistributedLockService);
   });
 
-  test("should export LoggerService", () => {
-    // Given: The services module is imported
-    // When: Accessing the LoggerService export
-    // Then: It should be defined and match the LoggerService implementation
-    expect(servicesModule.LoggerService).toBeDefined();
+  test("Given The services module is imported When Accessing the LoggerService export Then It should be defined and match the LoggerService implementation", () => {expect(servicesModule.LoggerService).toBeDefined();
     expect(servicesModule.LoggerService).toBe(LoggerService);
   });
 
-  test("should have exactly 2 exports", () => {
-    // Given: The services module is imported
-    // When: Checking the number of exports
-    // Then: There should be exactly 2 exports
-    expect(Object.keys(servicesModule).length).toBe(2);
+  test("Given The services module is imported When Checking the number of exports Then There should be exactly 2 exports", () => {expect(Object.keys(servicesModule).length).toBe(2);
   });
 });

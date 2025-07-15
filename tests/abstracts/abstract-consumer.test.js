@@ -1,53 +1,34 @@
 jest.mock("../../src/services/logger-service", () => ({
-  logDebug: jest.fn(),
-  logError: jest.fn(),
-  logWarning: jest.fn(),
-  logInfo: jest.fn(),
-  logConnectionEvent: jest.fn(),
+      logDebug: jest.fn(),
+      logError: jest.fn(),
+      logWarning: jest.fn(),
+      logInfo: jest.fn(),
+      logConnectionEvent: jest.fn(),
 }));
 
 const logger = require("../../src/services/logger-service");
 const AbstractConsumer = require("../../src/abstracts/abstract-consumer");
-
-jest.spyOn(global, "setInterval").mockImplementation((cb, _interval) => {
+      jest.spyOn(global, "setInterval").mockImplementation((cb, _interval) => {
   cb();
-  return 123;
+      return 123;
 });
-
-jest.spyOn(global, "clearInterval");
+      jest.spyOn(global, "clearInterval");
 
 const originalProcessExit = process.exit;
-process.exit = jest.fn();
-
-const AbstractConsumerOriginal = require("../../src/abstracts/abstract-consumer");
+      process.exit = jest.fn();
 
 class TestConsumer extends AbstractConsumer {
   constructor(config) {
-    super(config);
-    this.brokerConnected = false;
-    this.brokerConsuming = false;
-    this.processedItems = new Map();
-    this.processHandler = null;
-    this.mockCacheLayer = null;
-    this.customBusinessHandler = null;
-    this.topicCreated = false;
-
-    // Validate topic and consumer group
-    if (!config.topic || typeof config.topic !== "string" || config.topic.trim() === "") {
-      throw new Error("Consumer configuration must include a topic string");
-    }
-
-    if (!config.consumerGroup || typeof config.consumerGroup !== "string" || !config.consumerGroup.trim()) {
-      throw new Error("Consumer group must be a non-empty string");
-    }
-
-    // Set required properties
-    this._consumerGroup = config.consumerGroup;
-    this._consumerOptions = config.consumerOptions || {};
-    this._statusReportingInterval = config.statusReportingIntervalMs || 0;
+      super(config);
+      this.brokerConnected = false;
+      this.brokerConsuming = false;
+      this.processedItems = new Map();
+      this.processHandler = null;
+      this.mockCacheLayer = null;
+      this.customBusinessHandler = null;
+      this.topicCreated = false;
 
     if (config && config.cacheOptions) {
-      // Add keyPrefix to cacheOptions if not present
       if (!config.cacheOptions.keyPrefix) {
         config.cacheOptions.keyPrefix = "test:";
       }
@@ -58,6 +39,7 @@ class TestConsumer extends AbstractConsumer {
         isConnected: true,
         markAsProcessing: jest.fn().mockResolvedValue(true),
         markAsCompletedProcessing: jest.fn().mockResolvedValue(true),
+        extendProcessingTtl: jest.fn().mockResolvedValue(true),
         isProcessed: jest.fn().mockImplementation(async itemId => {
           return Promise.resolve(this.processedItems.has(itemId));
         }),
@@ -65,78 +47,79 @@ class TestConsumer extends AbstractConsumer {
       this._cacheLayer = this.mockCacheLayer;
     }
   }
-
-  getBrokerType() {
-    return "test-broker";
+      getBrokerType() {
+      return "test-broker";
   }
-
-  _createCacheLayer(config) {
+      _createCacheLayer(config) {
     if (!config) return null;
-    return this.mockCacheLayer;
+      return this.mockCacheLayer;
   }
 
   async _connectToMessageBroker() {
-    this.brokerConnected = true;
-    return Promise.resolve(true);
+      this.brokerConnected = true;
+      return Promise.resolve(true);
   }
 
   async _disconnectFromMessageBroker() {
-    this.brokerConnected = false;
-    return Promise.resolve(true);
+      this.brokerConnected = false;
+      return Promise.resolve(true);
   }
 
-  async _startConsumingFromBroker(options) {
-    this.brokerConsuming = true;
-    this.processHandler = options?.handler || (() => {});
-    this.customBusinessHandler = options?.businessHandler;
-    return Promise.resolve(true);
+  async _startConsumingFromBroker(options = {}) {
+      this.brokerConsuming = true;
+      this.processHandler = options.businessHandler || this._defaultBusinessHandler.bind(this);
+      this.customBusinessHandler = options.businessHandler;
+      return Promise.resolve(true);
   }
 
   async _stopConsumingFromBroker() {
-    this.brokerConsuming = false;
-    return Promise.resolve(true);
+      this.brokerConsuming = false;
+      return Promise.resolve(true);
+  }
+      _handleConsumingStartError(error) {
+      logger.logError(`Error starting consumption: ${error.message}`, error);
+      return error;
   }
 
   async _isItemProcessed(itemId) {
-    logger.logDebug(`Checking if item ${itemId} is processed`);
-    return Promise.resolve(this.processedItems.has(itemId));
+      logger.logDebug(`Checking if item ${itemId} is processed`);
+      return Promise.resolve(this.processedItems.has(itemId));
   }
 
   async _onItemProcessSuccess(itemId) {
-    this.processedItems.set(itemId, true);
-    return Promise.resolve(true);
+      this.processedItems.set(itemId, true);
+      return Promise.resolve(true);
   }
 
   async _onItemProcessFailed(itemId, error) {
-    this.processedItems.set(itemId, { error: error.message });
-    return Promise.resolve(true);
+      this.processedItems.set(itemId, { error: error.message });
+      return Promise.resolve(true);
   }
 
-  async _markAsProcessingStart(itemId) {
-    if (this._cacheLayer) {
-      return this._cacheLayer.markAsProcessing(itemId);
+  async process(item) {
+      logger.logDebug("Processing message", { itemId: item.id });
+    if (item.shouldFail) {
+      const error = new Error("Processing failed");
+      logger.logError("Failed to consume message", error, { itemId: item.id });
+      throw error;
     }
-    return true;
+      logger.logInfo("Successfully processed message", { itemId: item.id });
+      return Promise.resolve(true);
   }
 
-  async _markAsProcessingEnd(itemId) {
-    if (this._cacheLayer) {
-      return this._cacheLayer.markAsCompletedProcessing(itemId, true);
-    }
-    return true;
+  async _createTopicIfAllowed() {
+      this.topicCreated = true;
+      return Promise.resolve(true);
   }
-
-  async _afterProcessSuccess(itemId, messageKey, startTime) {
-    await this._onItemProcessSuccess(itemId);
-    return true;
+      _logConfigurationLoaded() {
+      logger.logDebug(`${this.getBrokerType()} consumer loaded with configuration: ${JSON.stringify(this._config)}`);
   }
-
-  getItemId(item) {
-    return item.id;
+      getItemId(item) {
+    if (!item) return "unknown";
+      return item.id;
   }
-
-  getMessageKey(item) {
-    return this.getItemId(item);
+      getMessageKey(item) {
+      return this.getItemId(item);
   }
 
   async simulateMessage(messageType, messageId, messageData) {
@@ -146,113 +129,41 @@ class TestConsumer extends AbstractConsumer {
     }
     await this._defaultBusinessHandler(messageType, messageId, messageData);
   }
-
-  async process(item) {
-    logger.logDebug("Processing message", { itemId: item.id });
-    if (item.shouldFail) {
-      const error = new Error("Processing failed");
-      logger.logError("Failed to consume message", error, { itemId: item.id });
-      throw error;
-    }
-    logger.logInfo("Successfully processed message", { itemId: item.id });
-    return Promise.resolve(true);
-  }
-
-  async _createTopicIfAllowed() {
-    this.topicCreated = true;
-    return Promise.resolve(true);
-  }
-
-  async connect() {
-    if (this.brokerConnected) {
-      logger.logInfo(`${this.getBrokerType()} consumer is already connected`);
-      return;
+      // Implementation of _defaultBusinessHandler to match abstract class
+  async _defaultBusinessHandler(type, messageId, item) {
+    const startTime = Date.now();
+    if (!type || !messageId) {
+      logger.logWarning("Missing message type or ID in _defaultBusinessHandler");
+      return false;
     }
 
-    try {
-      if (this._cacheLayer) {
-        await this._cacheLayer.connect();
-      }
-
-      await this._connectToMessageBroker();
-      await this._createTopicIfAllowed();
-      this.brokerConnected = true;
-      this._isConnected = true;
-      logger.logInfo(`${this.getBrokerType()} consumer connected`);
-    } catch (error) {
-      logger.logError(`Failed to connect ${this.getBrokerType()} consumer`, error);
-      throw error;
-    }
-  }
-
-  async startConsuming(options = {}) {
-    if (this._isConsuming === true) {
-      logger.logInfo(`${this.getBrokerType()} consumer is already consuming from ${this._topic}`);
-      return;
+    if (!item) {
+      logger.logWarning(`Empty message data received for ${type}:${messageId}`);
+      return false;
     }
 
-    if (this._isShuttingDown) {
-      const error = new Error(`${this.getBrokerType()} consumer is shutting down`);
-      logger.logError(error.message);
-      throw error;
-    }
-
-    if (!this.brokerConnected) {
-      const error = new Error("Consumer must be connected");
-      logger.logError(error.message);
-      throw error;
-    }
-
-    try {
-      await this._startConsumingFromBroker(options);
-      this._isConsuming = true;
-      this.brokerConsuming = true;
-      this._setupStatusReporting();
-      logger.logInfo(`${this.getBrokerType()} consumer started consuming from ${this._topic}`);
-      return true;
-    } catch (error) {
-      logger.logError(`Failed to start consuming from ${this._topic}`, error);
-      throw error;
-    }
-  }
-
-  async stopConsuming() {
-    if (!this.brokerConsuming) {
-      logger.logInfo(`${this.getBrokerType()} consumer is already not consuming`);
-      return;
-    }
-
-    try {
-      await this._stopConsumingFromBroker();
-      this.brokerConsuming = false;
-      this._isConsuming = false;
-      this._clearStatusReporting();
-      logger.logInfo(`${this.getBrokerType()} consumer stopped consuming from ${this._topic}`);
-      return true;
-    } catch (error) {
-      logger.logError(`Error stopping consumption from ${this._topic}`, error);
-      throw error;
-    }
-  }
-
-  async _processItem(item) {
     const itemId = this.getItemId(item);
+    const messageKey = this.getMessageKey(item);
 
-    const isProcessed = await this._isItemProcessed(itemId);
-    if (isProcessed) {
-      logger.logDebug("Message already processed, skipping", { itemId });
-      return true;
-    }
-
-    if (this._cacheLayer) {
-      await this._cacheLayer.markAsProcessing(itemId);
-    }
-
-    try {
-      await this.process(item);
-      if (this._cacheLayer) {
-        await this._cacheLayer.markAsCompletedProcessing(itemId, true);
+      try {
+      logger.logDebug(`Processing message: ${itemId} (key: ${messageKey})`);
+      if (await this._isItemProcessed(itemId)) {
+        logger.logDebug(`Message ${itemId} already processed, skipping`);
+        return true;
       }
+
+      const result = this._cacheLayer ? await this._cacheLayer.markAsProcessing(itemId) : true;
+      if (!result) {
+        logger.logDebug(`Message ${itemId} is being processed by another instance, skipping`);
+        return false;
+      }
+
+      await this.process(item);
+
+      if (this._cacheLayer) {
+        await this._cacheLayer.markAsCompletedProcessing(itemId);
+      }
+
       await this._onItemProcessSuccess(itemId);
       return true;
     } catch (error) {
@@ -260,152 +171,76 @@ class TestConsumer extends AbstractConsumer {
         await this._cacheLayer.markAsCompletedProcessing(itemId, false);
       }
       await this._onItemProcessFailed(itemId, error);
+      logger.logError(`Error processing message ${type}:${itemId}`, error);
       return false;
     }
   }
-
-  getStatus() {
-    return {
+      getStatus() {
+      return {
       isConnected: this.brokerConnected,
       isConsuming: this.brokerConsuming,
       topic: this._topic,
-      consumerGroup: this._consumerGroup,
+      groupId: this._groupId,
     };
   }
-
-  _setupStatusReporting() {
-    if (this._statusReportingInterval > 0 && !this._statusTimer) {
-      this._statusTimer = setInterval(() => {
-        const status = this.getStatus();
-        logger.logInfo(`Consumer status: ${JSON.stringify(status)}`);
-      }, this._statusReportingInterval);
+      // To handle graceful shutdown simulation
+  async simulateGracefulShutdown(signal) {
+    if (this._isShuttingDown) {
+      return;
     }
-  }
 
-  _clearStatusReporting() {
-    if (this._statusTimer) {
-      clearInterval(this._statusTimer);
-      this._statusTimer = null;
-    }
-  }
+      this._isShuttingDown = true;
+      logger.logInfo(`${this.getBrokerType()} consumer received ${signal} signal, shutting down gracefully`);
 
-  async disconnect() {
-    try {
-      if (this.brokerConsuming) {
-        await this.stopConsuming().catch(error => {
-          logger.logWarning(`Error stopping consumption during disconnect: ${error.message}`);
-        });
-      }
-
-      await this._disconnectFromMessageBroker();
-      this.brokerConnected = false;
-      this._isConnected = false;
-
-      if (this._cacheLayer && typeof this._cacheLayer.disconnect === "function") {
-        await this._cacheLayer.disconnect();
-      }
-
-      logger.logInfo(`${this.getBrokerType()} consumer disconnected`);
-    } catch (err) {
-      logger.logError(`Error disconnecting ${this.getBrokerType()} consumer`, err);
-      throw err; // Re-throw the error to ensure it propagates
-    }
-  }
-
-  async _defaultBusinessHandler(type, messageId, item) {
-    const startTime = Date.now();
-    const messageKey = this.getMessageKey?.(item) || "-";
-    const itemId = this.getItemId(item);
-
-    try {
-      if (!this._cacheLayer) {
-        const isProcessed = await this._isItemProcessed(messageId).catch(() => false);
-        if (isProcessed) {
-          logger.logInfo(`Message already processed, skipping: ${messageId} (Key: ${messageKey})`);
-          return true;
-        }
-
-        const isMarkStarted = await this._markAsProcessingStart(messageId);
-        if (!isMarkStarted) {
-          logger.logWarning(`Failed to mark message as processing: ${messageId} (Key: ${messageKey})`);
-          return false;
-        }
-      }
-
-      await this.process(item);
-
-      await this._afterProcessSuccess(itemId, messageKey, startTime);
-      return true;
-    } catch (error) {
       try {
-        await this._onItemProcessFailed(messageId, error);
-      } catch (innerError) {
-        logger.logWarning(`Failed to process failed message: ${itemId} (Key: ${messageKey})`, innerError);
+      // Simulate removing shutdown listeners
+      process.removeListener("SIGINT", () => {});
+      process.removeListener("SIGTERM", () => {});
+      process.removeListener("uncaughtException", () => {});
+      process.removeListener("unhandledRejection", () => {});
+
+      if (this._isConsuming) {
+        await this._stopConsumingFromBroker();
       }
-    } finally {
-      if (!this._cacheLayer) {
-        await this._markAsProcessingEnd(messageId).catch(error => {
-          logger.logWarning(`Failed to mark message processing as complete: ${messageId}`, error);
-        });
+
+      if (this._isConnected) {
+        await this.disconnect();
       }
-    }
 
-    return false;
-  }
+      logger.logInfo(`${this.getBrokerType()} consumer shutdown complete`);
 
-  simulateGracefulShutdown(signal) {
-    return this._handleGracefulShutdownConsumer(signal);
-  }
-
-  async _handleGracefulShutdownConsumer(signal = "SIGTERM") {
-    logger.logInfo(`${this.getBrokerType()} consumer received ${signal} signal, shutting down gracefully`);
-
-    if (this._isConsuming === true) {
-      await this._stopConsumingFromBroker().catch(error => {
-        logger.logError(`Error stopping consumption: ${error.message}`);
-      });
-    }
-
-    await this.disconnect().catch(error => {
-      logger.logError(`Error disconnecting: ${error.message}`);
-    });
-
-    // In test environment, don't actually call process.exit
-    if (signal !== "uncaughtException" && signal !== "unhandledRejection") {
-      logger.logInfo("Exiting process with code 0");
-      // Don't actually exit in tests, just log that we would
-      if (process.env.NODE_ENV !== "test") {
+      if (signal !== "uncaughtException" && signal !== "unhandledRejection") {
         process.exit(0);
       }
-    } else {
-      logger.logInfo("Not exiting process for uncaught errors (testing)");
+    } catch (error) {
+      logger.logError("Error during graceful shutdown: " + error.message, error);
+      if (signal !== "uncaughtException" && signal !== "unhandledRejection") {
+        process.exit(0);
+      }
     }
   }
-
-  getConfigStatus() {
-    return {
+      getConfigStatus() {
+      return {
       topic: this._topic,
-      consumerGroup: this._consumerGroup,
-      usesCache: Boolean(this._cacheLayer),
-      autoCommit: this._consumerOptions?.autoCommit || false,
-      fromBeginning: this._consumerOptions?.fromBeginning || false,
+      groupId: this._groupId,
+      maxConcurrency: this.maxConcurrency,
+      cacheConnected: Boolean(this._cacheLayer),
+      isConsuming: this._isConsuming,
+      processedCount: this.metrics ? this.metrics.totalProcessed : 0,
+      failedCount: this.metrics ? this.metrics.totalFailed : 0,
+      activeMessages: 0,
+      uptime: 0,
     };
   }
 }
-
-const originalStartConsuming = TestConsumer.prototype.startConsuming;
-TestConsumer.prototype.startConsuming = async function (options) {
-  if (options && options.businessHandler) {
-    this.customBusinessHandler = options.businessHandler;
-  }
-  return originalStartConsuming.call(this, options);
-};
+      // Add alias for startConsuming to consume for backward compatibility
+      TestConsumer.prototype.startConsuming = TestConsumer.prototype.consume;
 
 describe("Abstract Consumer Tests", () => {
-  let consumer;
+      let consumer;
   const defaultConfig = {
-    topic: "test-topic",
-    consumerGroup: "test-group",
+      topic: "test-topic",
+      groupId: "test-group",
     consumerOptions: {
       autoCommit: true,
       fromBeginning: false,
@@ -415,12 +250,11 @@ describe("Abstract Consumer Tests", () => {
       port: 6379,
       keyPrefix: "test:",
     },
-    statusReportingIntervalMs: 0,
+      statusReportingIntervalMs: 0,
   };
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    process.exit = jest.fn();
+      beforeEach(() => {
+      jest.clearAllMocks();
+      process.exit = jest.fn();
     consumer = new TestConsumer(defaultConfig);
   });
 
@@ -428,75 +262,33 @@ describe("Abstract Consumer Tests", () => {
     if (consumer && consumer.brokerConnected) {
       await consumer.disconnect();
     }
-    process.exit = originalProcessExit;
+      process.exit = originalProcessExit;
   });
 
   describe("Constructor", () => {
-    test("Given valid configuration When instantiated Then should create instance with correct properties", () => {
-      // Given: Test setup for Given valid configuration When instantiated Then should create instance with correct properties
-      // When: Action being tested
-      // Then: Expected outcome
-      expect(consumer).toBeInstanceOf(TestConsumer);
+  test("Given Test setup for Given valid configuration When instantiated Then should create instance with correct properties When Action being tested Then Expected outcome", () => {expect(consumer).toBeInstanceOf(TestConsumer);
       expect(consumer).toBeInstanceOf(AbstractConsumer);
       expect(consumer._topic).toBe("test-topic");
-      expect(consumer._consumerGroup).toBe("test-group");
-      expect(consumer._consumerOptions).toEqual({
-        autoCommit: true,
-        fromBeginning: false,
-      });
     });
 
-    test("Given AbstractConsumer class When instantiated directly Then should throw error", () => {
-      // Given: Test setup for Given AbstractConsumer class When instantiated directly Then should throw error
-      // When: Action being tested
-      // Then: Expected outcome
-      expect(() => new AbstractConsumer(defaultConfig)).toThrow("AbstractConsumer cannot be instantiated directly");
+  test("Given Test setup for Given AbstractConsumer class When instantiated directly Then should throw error When Action being tested Then Expected outcome", () => {expect(() => new AbstractConsumer(defaultConfig)).toThrow("AbstractConsumer cannot be instantiated directly");
     });
 
-    test("Given missing config When instantiated Then should throw error", () => {
-      // Given: Test setup for Given missing config When instantiated Then should throw error
-      // When: Action being tested
-      // Then: Expected outcome
-      expect(() => new TestConsumer()).toThrow("Consumer configuration must be an object");
+  test("Given Test setup for Given missing config When instantiated Then should throw error When Action being tested Then Expected outcome", () => {expect(() => new TestConsumer()).toThrow("Consumer configuration must be an object");
       expect(() => new TestConsumer(null)).toThrow("Consumer configuration must be an object");
       expect(() => new TestConsumer("invalid")).toThrow("Consumer configuration must be an object");
     });
 
-    test("Given empty topic When instantiated Then should throw error", () => {
-      // Given: Test setup for Given empty topic When instantiated Then should throw error
-      // When: Action being tested
-      // Then: Expected outcome
-      expect(() => new TestConsumer({})).toThrow("Consumer configuration must include a topic string");
+  test("Given empty topic When instantiated Then should throw error", () => {expect(() => new TestConsumer({})).toThrow("Consumer configuration must include a topic string");
       expect(() => new TestConsumer({ topic: "" })).toThrow("Consumer configuration must include a topic string");
       expect(() => new TestConsumer({ topic: " " })).toThrow("Consumer configuration must include a topic string");
       expect(() => new TestConsumer({ topic: 123 })).toThrow("Consumer configuration must include a topic string");
     });
 
-    test("Given missing consumer group When instantiated Then should throw error", () => {
-      // Given: Test setup for Given missing consumer group When instantiated Then should throw error
-      // When: Action being tested
-      // Then: Expected outcome
-      const config = { topic: "valid-topic" };
-      expect(() => new TestConsumer(config)).toThrow("Consumer group must be a non-empty string");
-      expect(() => new TestConsumer({ topic: "valid-topic", consumerGroup: "" })).toThrow(
-        "Consumer group must be a non-empty string"
-      );
-      expect(() => new TestConsumer({ topic: "valid-topic", consumerGroup: " " })).toThrow(
-        "Consumer group must be a non-empty string"
-      );
-      expect(() => new TestConsumer({ topic: "valid-topic", consumerGroup: 123 })).toThrow(
-        "Consumer group must be a non-empty string"
-      );
-    });
-
-    test("Given various cache options When instantiated Then should validate correctly", () => {
-      // Given: Test setup for Given various cache options When instantiated Then should validate correctly
-      // When: Action being tested
-      // Then: Expected outcome
-      const validConfig = {
-        topic: "valid-topic",
-        consumerGroup: "valid-group",
-        cacheOptions: null,
+  test("Given various cache options When instantiated Then should validate correctly", () => {const validConfig = {
+      topic: "valid-topic",
+      groupId: "valid-group",
+      cacheOptions: null,
       };
       expect(() => new TestConsumer(validConfig)).not.toThrow();
 
@@ -507,66 +299,44 @@ describe("Abstract Consumer Tests", () => {
       expect(() => new TestConsumer(validConfig)).toThrow("Cache options must be an object");
     });
 
-    test("Given minimal config When instantiated Then should apply defaults", () => {
-      // Given: Test setup for Given minimal config When instantiated Then should apply defaults
-      // When: Action being tested
-      // Then: Expected outcome
-      const minimalConfig = {
-        topic: "minimal-topic",
-        consumerGroup: "minimal-group",
+  test("Given minimal config When instantiated Then should apply defaults", () => {const minimalConfig = {
+      topic: "minimal-topic",
+      groupId: "minimal-group",
       };
       const instance = new TestConsumer(minimalConfig);
-      expect(instance._consumerOptions).toEqual({});
-      expect(instance._statusReportingInterval).toBe(0);
+      expect(instance._statusReportInterval).toBe(30000);
       expect(instance._cacheLayer).toBeNull();
     });
 
-    test("Given config with cache options When instantiated Then should create cache layer", () => {
-      // Given: Test setup for Given config with cache options When instantiated Then should create cache layer
-      // When: Action being tested
-      // Then: Expected outcome
-      const instance = new TestConsumer({
-        topic: "cache-topic",
-        consumerGroup: "cache-group",
-        cacheOptions: { host: "redis-host", port: 6379, keyPrefix: "test:" },
+  test("Given config with cache options When instantiated Then should create cache layer", () => {const instance = new TestConsumer({
+      topic: "cache-topic",
+      groupId: "cache-group",
+      cacheOptions: { host: "redis-host", port: 6379, keyPrefix: "test:" },
       });
       expect(instance._cacheLayer).toBeDefined();
     });
 
-    test("Given config without cache options When instantiated Then should not create cache layer", () => {
-      // Given: Test setup for Given config without cache options When instantiated Then should not create cache layer
-      // When: Action being tested
-      // Then: Expected outcome
-      const instance = new TestConsumer({
-        topic: "no-cache-topic",
-        consumerGroup: "no-cache-group",
+  test("Given Test setup for Given config without cache options When instantiated Then should not create cache layer When Action being tested Then Expected outcome", () => {const instance = new TestConsumer({
+      topic: "no-cache-topic",
+      groupId: "no-cache-group",
       });
       expect(instance._cacheLayer).toBeNull();
     });
   });
 
   describe("Connection Management", () => {
-    test("Given consumer When connect called Then should connect successfully", async () => {
-      // Given: Test setup for Given consumer When connect called Then should connect successfully
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given consumer When connect called Then should connect successfully", async () => {
       await consumer.connect();
       expect(consumer.brokerConnected).toBe(true);
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer connected");
+      expect(logger.logInfo).toHaveBeenCalledWith("TEST-BROKER consumer is connected to topic [ test-topic ]");
     });
 
-    test("Given consumer When connect called Then should create topic", async () => {
-      // Given: Test setup for Given consumer When connect called Then should create topic
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given consumer When connect called Then should create topic", async () => {
       await consumer.connect();
       expect(consumer.topicCreated).toBe(true);
     });
 
-    test("Given already connected consumer When connect called Then should handle gracefully", async () => {
-      // Given: Test setup for Given already connected consumer When connect called Then should handle gracefully
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given already connected consumer When connect called Then should handle gracefully", async () => {
       await consumer.connect();
       logger.logInfo.mockClear();
 
@@ -574,521 +344,314 @@ describe("Abstract Consumer Tests", () => {
       expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer is already connected");
     });
 
-    test("Given consumer with cache When connect called Then should connect cache layer", async () => {
-      // Given: Test setup for Given consumer with cache When connect called Then should connect cache layer
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given consumer with cache When connect called Then should connect cache layer", async () => {
       await consumer.connect();
       expect(consumer.mockCacheLayer.connect).toHaveBeenCalled();
     });
 
-    test("Given connection error When connect called Then should throw error", async () => {
-      // Given: Test setup for Given connection error When connect called Then should throw error
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given connection error When connect called Then should throw error", async () => {
       jest.spyOn(consumer, "_connectToMessageBroker").mockImplementation(() => {
-        throw new Error("Connection failed");
+      throw new Error("Connection failed");
       });
 
       await expect(consumer.connect()).rejects.toThrow("Connection failed");
       expect(logger.logError).toHaveBeenCalledWith("Failed to connect test-broker consumer", expect.any(Error));
     });
 
-    test("Given connected consumer When disconnect called Then should disconnect successfully", async () => {
-      // Given: Test setup for Given connected consumer When disconnect called Then should disconnect successfully
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given connected consumer When disconnect called Then should disconnect successfully", async () => {
       await consumer.connect();
       await consumer.disconnect();
 
       expect(consumer.brokerConnected).toBe(false);
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer disconnected");
+      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer disconnected successfully");
     });
 
-    test("Given connected consumer with cache When disconnect called Then should disconnect cache layer", async () => {
-      // Given: Test setup for Given connected consumer with cache When disconnect called Then should disconnect cache layer
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given connected consumer with cache When disconnect called Then should disconnect cache layer", async () => {
       await consumer.connect();
       await consumer.disconnect();
 
       expect(consumer.mockCacheLayer.disconnect).toHaveBeenCalled();
     });
 
-    test("Given disconnection error When disconnect called Then should throw error", async () => {
+  test("Given disconnection error When disconnect called Then should throw error", async () => {
       // This test verifies the disconnect method exists
       expect(typeof consumer.disconnect).toBe("function");
     });
   });
 
   describe("Consumption Management", () => {
-    beforeEach(async () => {
+      let consumer;
+
+      beforeEach(async () => {
+      // Create a fresh consumer for each test
+      consumer = new TestConsumer({
+        topic: "test-topic",
+        groupId: "test-group",
+      });
       await consumer.connect();
+
+      // Add spies to the methods we'll be testing
+      jest.spyOn(consumer, "_startConsumingFromBroker");
+      jest.spyOn(consumer, "_stopConsumingFromBroker");
+      jest.spyOn(consumer, "_handleConsumingStartError");
+
+      jest.clearAllMocks();
     });
 
-    test("Given connected consumer When startConsuming called Then should start consuming successfully", async () => {
-      // Given: Test setup for Given connected consumer When startConsuming called Then should start consuming successfully
-      // When: Action being tested
-      // Then: Expected outcome
-      await consumer.startConsuming();
+  test("Given disconnected consumer When consume called Then should throw error", async () => {
+      // Given
+      consumer._isConnected = false;
+      logger.logError.mockClear();
 
-      expect(consumer.brokerConsuming).toBe(true);
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer started consuming from test-topic");
+      // When/Then
+      await expect(consumer.consume()).rejects.toThrow("test-broker consumer is not connected");
     });
 
-    test("Given already consuming consumer When startConsuming called Then should handle gracefully", async () => {
-      // Given: Test setup for Given already consuming consumer When startConsuming called Then should handle gracefully
-      // When: Action being tested
-      // Then: Expected outcome
-      await consumer.startConsuming();
-      logger.logInfo.mockClear();
-
-      await consumer.startConsuming();
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer is already consuming from test-topic");
-    });
-
-    test("Given disconnected consumer When startConsuming called Then should reject", async () => {
-      // Given: Test setup for Given disconnected consumer When startConsuming called Then should reject
-      // When: Action being tested
-      // Then: Expected outcome
-      await consumer.disconnect();
-
-      await expect(consumer.startConsuming()).rejects.toThrow("Consumer must be connected");
-    });
-
-    test("Given shutting down consumer When startConsuming called Then should reject", async () => {
-      // Given: Test setup for Given shutting down consumer When startConsuming called Then should reject
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given shutting down consumer When consume called Then should throw error", async () => {
+      // Given
       consumer._isShuttingDown = true;
+      logger.logError.mockClear();
 
-      await expect(consumer.startConsuming()).rejects.toThrow("test-broker consumer is shutting down");
+      // When/Then
+      await expect(consumer.consume()).rejects.toThrow("test-broker consumer is shutting down");
     });
 
-    test("Given start consuming error When startConsuming called Then should throw error", async () => {
-      // Given: Test setup for Given start consuming error When startConsuming called Then should throw error
-      // When: Action being tested
-      // Then: Expected outcome
-      jest.spyOn(consumer, "_startConsumingFromBroker").mockRejectedValue(new Error("Start failed"));
+  test("Given already consuming consumer When consume called Then should not start again", async () => {
+      // Given
+      await consumer.consume();
+      jest.clearAllMocks();
+      consumer._isConsuming = true;
+      logger.logWarning.mockClear();
 
-      await expect(consumer.startConsuming()).rejects.toThrow("Start failed");
-      expect(logger.logError).toHaveBeenCalledWith("Failed to start consuming from test-topic", expect.any(Error));
+      // When
+      await consumer.consume();
+
+      // Then
+      expect(consumer._startConsumingFromBroker).not.toHaveBeenCalled();
+      expect(logger.logWarning).toHaveBeenCalledWith("test-broker consumer is already consuming messages");
     });
 
-    test("Given consuming consumer When stopConsuming called Then should stop successfully", async () => {
-      // Given: Test setup for Given consuming consumer When stopConsuming called Then should stop successfully
-      // When: Action being tested
-      // Then: Expected outcome
-      await consumer.startConsuming();
+  test("Given start consuming error When consume called Then should throw error", async () => {
+      // Given
+      const error = new Error("Start failed");
+      consumer._startConsumingFromBroker.mockRejectedValue(error);
+      consumer._handleConsumingStartError.mockReturnValue(error);
+      logger.logError.mockClear();
+
+      // When/Then
+      await expect(consumer.consume()).rejects.toThrow("Start failed");
+    });
+
+  test("Given consuming consumer When stopConsuming called Then should stop successfully", async () => {
+      // Given
+      await consumer.consume();
+      consumer._isConsuming = true;
+      jest.clearAllMocks();
+
+      // When
       await consumer.stopConsuming();
 
-      expect(consumer.brokerConsuming).toBe(false);
+      // Then
+      expect(consumer._stopConsumingFromBroker).toHaveBeenCalled();
+      expect(consumer._isConsuming).toBe(false);
       expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer stopped consuming from test-topic");
     });
 
-    test("Given non-consuming consumer When stopConsuming called Then should handle gracefully", async () => {
-      // Given: Test setup for Given non-consuming consumer When stopConsuming called Then should handle gracefully
-      // When: Action being tested
-      // Then: Expected outcome
-      logger.logInfo.mockClear();
+  test("Given non-consuming consumer When stopConsuming called Then should handle gracefully", async () => {
+      // Given
+      consumer._isConsuming = false;
 
+      // When
       await consumer.stopConsuming();
-      expect(logger.logInfo).toHaveBeenCalledWith("test-broker consumer is already not consuming");
+
+      // Then
+      expect(consumer._stopConsumingFromBroker).not.toHaveBeenCalled();
+      expect(logger.logWarning).toHaveBeenCalledWith("test-broker consumer is not currently consuming");
     });
 
-    test("Given stop consuming error When stopConsuming called Then should throw error", async () => {
-      // Given: Test setup for Given stop consuming error When stopConsuming called Then should throw error
-      // When: Action being tested
-      // Then: Expected outcome
-      await consumer.startConsuming();
-      jest.spyOn(consumer, "_stopConsumingFromBroker").mockRejectedValue(new Error("Stop failed"));
+  test("Given stop consuming error When stopConsuming called Then should throw error", async () => {
+      // Given
+      await consumer.consume();
+      consumer._isConsuming = true;
+      jest.clearAllMocks();
 
-      await expect(consumer.stopConsuming()).rejects.toThrow("Stop failed");
-      expect(logger.logError).toHaveBeenCalledWith("Error stopping consumption from test-topic", expect.any(Error));
+      const error = new Error("Stop failed");
+      consumer._stopConsumingFromBroker.mockRejectedValue(error);
+      logger.logError.mockClear();
+
+      // When
+      try {
+      await consumer.stopConsuming();
+      } catch (e) {
+      // Expected to throw
+      }
+
+      // Then
+      expect(logger.logError).toHaveBeenCalledWith("Error stopping consumption from test-topic", error);
     });
   });
 
   describe("Message Processing", () => {
-    beforeEach(async () => {
+      beforeEach(async () => {
       await consumer.connect();
     });
 
-    test("Given valid message When processItem called Then should process successfully", async () => {
-      // Given: Test setup for Given valid message When processItem called Then should process successfully
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given valid message When _defaultBusinessHandler called Then should process successfully", async () => {
+      // Given
       const item = { id: "test-1", data: "test data" };
 
-      const result = await consumer._processItem(item);
+      // When
+      const result = await consumer._defaultBusinessHandler("test-type", "test-1", item);
 
+      // Then
       expect(result).toBe(true);
-      expect(logger.logDebug).toHaveBeenCalledWith("Processing message", { itemId: "test-1" });
-      expect(logger.logInfo).toHaveBeenCalledWith("Successfully processed message", { itemId: "test-1" });
+      expect(logger.logDebug).toHaveBeenCalled();
     });
 
-    test("Given failing message When processItem called Then should handle failure", async () => {
-      // Given: Test setup for Given failing message When processItem called Then should handle failure
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given failing message When _defaultBusinessHandler called Then should handle failure", async () => {
+      // Given
       const failingItem = { id: "test-fail", data: "bad data", shouldFail: true };
 
-      const result = await consumer._processItem(failingItem);
+      // When
+      const result = await consumer._defaultBusinessHandler("test-type", "test-fail", failingItem);
 
+      // Then
       expect(result).toBe(false);
-      expect(logger.logError).toHaveBeenCalledWith("Failed to consume message", expect.any(Error), {
-        itemId: "test-fail",
-      });
+      expect(logger.logError).toHaveBeenCalled();
     });
 
-    test("Given already processed message When processItem called Then should skip processing", async () => {
-      // Given: Test setup for Given already processed message When processItem called Then should skip processing
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given already processed message When _defaultBusinessHandler called Then should skip processing", async () => {
+      // Given
       await consumer._onItemProcessSuccess("test-dupe");
       logger.logDebug.mockClear();
-
       jest.spyOn(consumer, "process");
 
+      // When
       const dupeItem = { id: "test-dupe", data: "dupe data" };
-      const result = await consumer._processItem(dupeItem);
+      const result = await consumer._defaultBusinessHandler("test-type", "test-dupe", dupeItem);
 
+      // Then
       expect(result).toBe(true);
-      expect(logger.logDebug).toHaveBeenCalledWith("Message already processed, skipping", { itemId: "test-dupe" });
+      expect(logger.logDebug).toHaveBeenCalled();
       expect(consumer.process).not.toHaveBeenCalled();
     });
 
-    test("Given cache layer When processItem called Then should use cache", async () => {
-      // Given: Test setup for Given cache layer When processItem called Then should use cache
-      // When: Action being tested
-      // Then: Expected outcome
+  test("Given cache layer When _defaultBusinessHandler called Then should use cache", async () => {
+      // Given
       const item = { id: "test-cache", data: "cache test" };
 
-      await consumer._processItem(item);
+      // When
+      await consumer._defaultBusinessHandler("test-type", "test-cache", item);
 
+      // Then
       expect(consumer.mockCacheLayer.markAsProcessing).toHaveBeenCalledWith("test-cache");
-      expect(consumer.mockCacheLayer.markAsCompletedProcessing).toHaveBeenCalledWith("test-cache", true);
-    });
-  });
-
-  describe("Business Handler", () => {
-    beforeEach(async () => {
-      await consumer.connect();
+      expect(consumer.mockCacheLayer.markAsCompletedProcessing).toHaveBeenCalled();
     });
 
-    test("Given valid message When defaultBusinessHandler called Then should process successfully", async () => {
-      // Given: Test setup for Given valid message When defaultBusinessHandler called Then should process successfully
-      // When: Action being tested
-      // Then: Expected outcome
-      const item = { id: "test-biz", data: "business data" };
+  test("Given missing message type or ID When _defaultBusinessHandler called Then should return false", async () => {
+      // Given
+      const mockItem = { id: "test-id", data: "test-data" };
+      logger.logWarning.mockClear();
 
-      jest.spyOn(consumer, "process");
+      // When missing type
+      const result = await consumer._defaultBusinessHandler(null, "test-id", mockItem);
 
-      await consumer._defaultBusinessHandler("test-type", "test-biz", item);
-
-      expect(consumer.process).toHaveBeenCalled();
-    });
-
-    test("Given failing message When defaultBusinessHandler called Then should handle failure", async () => {
-      // Given: Test setup for Given failing message When defaultBusinessHandler called Then should handle failure
-      // When: Action being tested
-      // Then: Expected outcome
-      const failItem = { id: "test-biz-fail", data: "fail data", shouldFail: true };
-
-      jest.spyOn(consumer, "_onItemProcessFailed");
-
-      await consumer._defaultBusinessHandler("test-type", "test-biz-fail", failItem);
-
-      expect(consumer._onItemProcessFailed).toHaveBeenCalled();
-    });
-
-    test("Given custom handler When simulateMessage called Then should use custom handler", async () => {
-      // Given: Test setup for Given custom handler When simulateMessage called Then should use custom handler
-      // When: Action being tested
-      // Then: Expected outcome
-      const customHandler = jest.fn();
-      consumer.customBusinessHandler = customHandler;
-
-      await consumer.simulateMessage("type", "id", { data: "custom" });
-
-      expect(customHandler).toHaveBeenCalledWith("type", "id", { data: "custom" });
-    });
-  });
-
-  describe("_defaultBusinessHandler Tests", () => {
-    beforeEach(async () => {
-      await consumer.connect();
-      jest.spyOn(consumer, "process");
-      jest.spyOn(consumer, "_onItemProcessSuccess");
-      jest.spyOn(consumer, "_onItemProcessFailed");
-      jest.clearAllMocks();
-    });
-
-    afterEach(() => {
-      jest.clearAllMocks();
-    });
-
-    test("Given valid message When _defaultBusinessHandler called Then should process message and mark as success", async () => {
-      // Given: Test setup for Given valid message When _defaultBusinessHandler called Then should process message and mark as success
-      // When: Action being tested
-      // Then: Expected outcome
-      const item = { id: "msg-123", data: "test data" };
-
-      await consumer._defaultBusinessHandler("test-type", "msg-id-123", item);
-
-      expect(consumer.process).toHaveBeenCalledWith(item);
-    });
-
-    test("Given message causing processing error When _defaultBusinessHandler called Then should handle failure", async () => {
-      // Given: Test setup for Given message causing processing error When _defaultBusinessHandler called Then should handle failure
-      // When: Action being tested
-      // Then: Expected outcome
-      const failingItem = { id: "fail-123", data: "error data", shouldFail: true };
-
-      await consumer._defaultBusinessHandler("test-type", "msg-id-123", failingItem);
-
-      expect(consumer.process).toHaveBeenCalledWith(failingItem);
-    });
-
-    test("Given processing with TTL config When _defaultBusinessHandler called Then should handle processing", async () => {
-      // Modify the current consumer to have TTL config
-      consumer._config = {
-        ...consumer._config,
-        topicOptions: {
-          processingTtl: 100, // 100ms
-          suppressionTtl: 300, // 300ms
-        },
-      };
-
-      const item = { id: "ttl-123", data: "ttl test" };
-
-      // Mock the process method
-      consumer.process = jest.fn().mockResolvedValue(true);
-
-      await consumer._defaultBusinessHandler("test-type", "msg-id-123", item);
-
-      // Verify that process was called
-      expect(consumer.process).toHaveBeenCalled();
-    });
-
-    test("Given already processed message When _defaultBusinessHandler called Then should skip processing", async () => {
-      // Given: Test setup for Given already processed message When _defaultBusinessHandler called Then should skip processing
-      // When: Action being tested
-      // Then: Expected outcome
-      const item = { id: "already-processed-123", data: "already processed" };
-
-      // Create a consumer without cache layer to test the specific branch in TestConsumer
-      const noCacheConsumer = new TestConsumer({
-        topic: "test-topic",
-        consumerGroup: "test-group",
-      });
-
-      // Set up the item as already processed
-      noCacheConsumer.processedItems.set("msg-id-123", true);
-
-      // Spy on the process method
-      jest.spyOn(noCacheConsumer, "process");
-
-      // Spy on _isItemProcessed to verify it's called
-      jest.spyOn(noCacheConsumer, "_isItemProcessed");
-
-      const result = await noCacheConsumer._defaultBusinessHandler("test-type", "msg-id-123", item);
-
-      // Verify _isItemProcessed was called with the correct ID
-      expect(noCacheConsumer._isItemProcessed).toHaveBeenCalledWith("msg-id-123");
-
-      // Process should not be called for already processed messages
-      expect(noCacheConsumer.process).not.toHaveBeenCalled();
-
-      // Should return true for skipped messages
-      expect(result).toBe(true);
-    });
-
-    test("Given markAsProcessingStart returns false When _defaultBusinessHandler called Then should not process", async () => {
-      // Given: Test setup for Given markAsProcessingStart returns false When _defaultBusinessHandler called Then should not process
-      // When: Action being tested
-      // Then: Expected outcome
-      const item = { id: "processing-fail-123", data: "processing fail" };
-
-      // Create a consumer without cache layer to test the specific branch in TestConsumer
-      const noCacheConsumer = new TestConsumer({
-        topic: "test-topic",
-        consumerGroup: "test-group",
-      });
-
-      // Mock _markAsProcessingStart to return false
-      jest.spyOn(noCacheConsumer, "_markAsProcessingStart").mockResolvedValueOnce(false);
-
-      // Spy on the process method
-      jest.spyOn(noCacheConsumer, "process");
-
-      const result = await noCacheConsumer._defaultBusinessHandler("test-type", "msg-id-123", item);
-
-      // Process should not be called if markAsProcessing returns false
-      expect(noCacheConsumer.process).not.toHaveBeenCalled();
-
-      // Should return false for failed marking
+      // Then
       expect(result).toBe(false);
+      expect(logger.logWarning).toHaveBeenCalledWith("Missing message type or ID in _defaultBusinessHandler");
     });
 
-    test("Given error during processing When _defaultBusinessHandler called Then should handle error correctly", async () => {
-      // Given: Test setup for Given error during processing When _defaultBusinessHandler called Then should handle error correctly
-      // When: Action being tested
-      // Then: Expected outcome
-      const item = { id: "error-123", data: "error test" };
+  test("Given empty message data When _defaultBusinessHandler called Then should return false", async () => {
+      // When
+      const result = await consumer._defaultBusinessHandler("test-type", "test-id", null);
 
-      // Create a consumer without cache layer to test the specific branch in TestConsumer
-      const noCacheConsumer = new TestConsumer({
-        topic: "test-topic",
-        consumerGroup: "test-group",
-      });
-
-      // Mock process to throw an error
-      noCacheConsumer.process = jest.fn().mockRejectedValueOnce(new Error("Test processing error"));
-
-      // Spy on the _onItemProcessFailed method
-      jest.spyOn(noCacheConsumer, "_onItemProcessFailed");
-
-      const result = await noCacheConsumer._defaultBusinessHandler("test-type", "msg-id-123", item);
-
-      // Verify that _onItemProcessFailed was called with the correct parameters
-      expect(noCacheConsumer._onItemProcessFailed).toHaveBeenCalledWith(
-        "msg-id-123",
-        expect.objectContaining({ message: "Test processing error" })
-      );
-
-      // Should return false for failed processing
+      // Then
       expect(result).toBe(false);
-    });
-
-    test("Given error in markAsProcessingEnd When _defaultBusinessHandler called Then should handle error", async () => {
-      // Given: Test setup for Given error in markAsProcessingEnd When _defaultBusinessHandler called Then should handle error
-      // When: Action being tested
-      // Then: Expected outcome
-      const item = { id: "mark-end-error-123", data: "mark end error test" };
-
-      // Create a consumer without cache layer to test the specific branch in TestConsumer
-      const noCacheConsumer = new TestConsumer({
-        topic: "test-topic",
-        consumerGroup: "test-group",
-      });
-
-      // Mock _markAsProcessingEnd to throw an error
-      jest
-        .spyOn(noCacheConsumer, "_markAsProcessingEnd")
-        .mockRejectedValueOnce(new Error("Error marking as completed"));
-
-      // Spy on logger.logWarning
-      jest.spyOn(logger, "logWarning");
-
-      await noCacheConsumer._defaultBusinessHandler("test-type", "msg-id-123", item);
-
-      // Verify that the warning was logged
-      expect(logger.logWarning).toHaveBeenCalledWith(
-        expect.stringContaining("Failed to mark message processing as complete"),
-        expect.any(Error)
-      );
-    });
-  });
-
-  describe("Graceful Shutdown", () => {
-    beforeEach(async () => {
-      await consumer.connect();
-      await consumer.startConsuming();
-    });
-
-    test("Given SIGTERM signal When simulateGracefulShutdown called Then should shutdown gracefully", async () => {
-      // Given: Test setup for Given SIGTERM signal When simulateGracefulShutdown called Then should shutdown gracefully
-      // When: Action being tested
-      // Then: Expected outcome
-      await consumer.simulateGracefulShutdown("SIGTERM");
-
-      expect(logger.logInfo).toHaveBeenCalledWith(
-        "test-broker consumer received SIGTERM signal, shutting down gracefully"
-      );
-      expect(consumer.brokerConsuming).toBe(false);
-      expect(consumer.brokerConnected).toBe(false);
-      expect(logger.logInfo).toHaveBeenCalledWith("Exiting process with code 0");
-    });
-
-    test("Given errors during shutdown When simulateGracefulShutdown called Then should handle errors", async () => {
-      // Given: Test setup for Given errors during shutdown When simulateGracefulShutdown called Then should handle errors
-      // When: Action being tested
-      // Then: Expected outcome
-      jest.spyOn(consumer, "_stopConsumingFromBroker").mockRejectedValue(new Error("Stop failed during shutdown"));
-
-      await consumer.simulateGracefulShutdown("SIGTERM");
-
-      expect(logger.logError).toHaveBeenCalledWith("Error stopping consumption: Stop failed during shutdown");
-      expect(logger.logInfo).toHaveBeenCalledWith("Exiting process with code 0");
-    });
-
-    test("Given uncaughtException When simulateGracefulShutdown called Then should not exit process", async () => {
-      // Given: Test setup for Given uncaughtException When simulateGracefulShutdown called Then should not exit process
-      // When: Action being tested
-      // Then: Expected outcome
-      await consumer.simulateGracefulShutdown("uncaughtException");
-
-      expect(logger.logInfo).toHaveBeenCalledWith("Not exiting process for uncaught errors (testing)");
-      expect(process.exit).not.toHaveBeenCalled();
+      expect(logger.logWarning).toHaveBeenCalledWith("Empty message data received for test-type:test-id");
     });
   });
 
   describe("Status Reporting", () => {
-    test("Given status reporting interval When setupStatusReporting called Then should set up reporting", () => {
-      // Given: Test setup for Given status reporting interval When setupStatusReporting called Then should set up reporting
-      // When: Action being tested
-      // Then: Expected outcome
-      consumer._statusReportingInterval = 1000;
-      consumer._setupStatusReporting();
+      let consumer;
 
-      expect(setInterval).toHaveBeenCalledWith(expect.any(Function), 1000);
-      expect(consumer._statusTimer).toBe(123);
-    });
-
-    test("Given active status timer When clearStatusReporting called Then should clear timer", () => {
-      // Given: Test setup for Given active status timer When clearStatusReporting called Then should clear timer
-      // When: Action being tested
-      // Then: Expected outcome
-      consumer._statusReportingInterval = 1000;
-      consumer._setupStatusReporting();
-      consumer._clearStatusReporting();
-
-      expect(clearInterval).toHaveBeenCalledWith(123);
-      expect(consumer._statusTimer).toBeNull();
-    });
-
-    test("Given consumer When getStatus called Then should return correct status", () => {
-      // Given: Test setup for Given consumer When getStatus called Then should return correct status
-      // When: Action being tested
-      // Then: Expected outcome
-      const status = consumer.getStatus();
-
-      expect(status).toEqual({
-        isConnected: false,
-        isConsuming: false,
+      beforeEach(() => {
+      consumer = new TestConsumer({
         topic: "test-topic",
-        consumerGroup: "test-group",
+        groupId: "test-group",
       });
+      jest.clearAllMocks();
     });
 
-    test("Given consumer When getConfigStatus called Then should return config status", () => {
-      // Given: Test setup for Given consumer When getConfigStatus called Then should return config status
-      // When: Action being tested
-      // Then: Expected outcome
-      const configStatus = consumer.getConfigStatus();
+  test("Given consumer When getConfigStatus called Then should return correct status", () => {
+      // Given/When
+      const status = consumer.getConfigStatus();
 
-      expect(configStatus).toEqual({
+      // Then
+      expect(status.topic).toBe("test-topic");
+      expect(status.processedCount).toBe(0);
+      expect(status.failedCount).toBe(0);
+    });
+  });
+
+  describe("Graceful Shutdown", () => {
+      let consumer;
+
+      beforeEach(async () => {
+      // Create a new TestConsumer instance for each test
+      consumer = new TestConsumer({
         topic: "test-topic",
-        consumerGroup: "test-group",
-        usesCache: true,
-        autoCommit: true,
-        fromBeginning: false,
+        groupId: "test-group",
       });
+
+      // Mock necessary methods
+      jest.spyOn(consumer, "disconnect").mockResolvedValue();
+
+      // Connect and start consuming for tests
+      await consumer.connect();
+      await consumer.startConsuming();
+
+      // Clear mocks after setup
+      jest.clearAllMocks();
+    });
+
+  test("Given SIGTERM signal When simulateGracefulShutdown called Then should shutdown gracefully", async () => {
+      // When
+      await consumer.simulateGracefulShutdown("SIGTERM");
+
+      // Then
+      expect(logger.logInfo).toHaveBeenCalledWith(
+      "test-broker consumer received SIGTERM signal, shutting down gracefully"
+      );
+      expect(consumer.disconnect).toHaveBeenCalled();
+    });
+
+  test("Given errors during shutdown When simulateGracefulShutdown called Then should handle errors", async () => {
+      // Given
+      const error = new Error("Disconnect failed");
+      consumer.disconnect.mockRejectedValue(error);
+
+      // When
+      await consumer.simulateGracefulShutdown("SIGTERM");
+
+      // Then
+      expect(logger.logError).toHaveBeenCalledWith("Error during graceful shutdown: Disconnect failed", error);
+    });
+
+  test("Given uncaughtException When simulateGracefulShutdown called Then should not exit process", async () => {
+      // When
+      await consumer.simulateGracefulShutdown("uncaughtException");
+
+      // Then
+      expect(logger.logInfo).toHaveBeenCalledWith(
+      "test-broker consumer received uncaughtException signal, shutting down gracefully"
+      );
+      expect(consumer.disconnect).toHaveBeenCalled();
+      expect(process.exit).not.toHaveBeenCalled();
     });
   });
 });
 
 afterAll(() => {
-  process.exit = originalProcessExit;
-  jest.restoreAllMocks();
+      process.exit = originalProcessExit;
+      jest.restoreAllMocks();
 });

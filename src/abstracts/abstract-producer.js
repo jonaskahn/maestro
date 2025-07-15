@@ -14,6 +14,7 @@
 const logger = require("../services/logger-service");
 
 const DistributedLockService = require("../services/distributed-lock-service");
+const TtlConfig = require("../config/ttl-config");
 
 const REQUIRED_CONFIG_FIELDS = ["topic"];
 
@@ -269,8 +270,8 @@ class AbstractProducer {
       logger.logInfo(`${this.getBrokerType()} producer is already connected`);
       return;
     }
-
     try {
+      await this.#delayConnect();
       await this.performConnection();
       await this.#processAfterConnected();
       await this._createTopicIfAllowed();
@@ -281,6 +282,13 @@ class AbstractProducer {
       logger.logError(`Failed to connect ${this.getBrokerType()} producer`, error);
       throw error;
     }
+  }
+
+  #delayConnect() {
+    const baseTime = TtlConfig.getAllTtlValues().DELAY_BASE_TIMEOUT_MS * 2;
+    const time = Math.floor(Math.random() * baseTime) + baseTime / 2;
+    logger.logDebug(`Producer ${this.getBrokerType()} is delayed in ${time} ms before connect`);
+    return new Promise(resolve => setTimeout(resolve, time));
   }
 
   async #processAfterConnected() {
