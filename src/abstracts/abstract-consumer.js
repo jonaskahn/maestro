@@ -91,7 +91,7 @@ class AbstractConsumer {
   }
 
   #validateTopicConfiguration(config) {
-    if (!config.topic || typeof config.topic !== "string") {
+    if (!config.topic || typeof config.topic !== "string" || config.topic?.trim() === "") {
       throw new Error("Consumer configuration must include a topic string");
     }
   }
@@ -600,8 +600,7 @@ class AbstractConsumer {
       await this._onItemProcessFailed(itemId, error);
       this.metrics[METRICS_PROPERTIES.TOTAL_FAILED]++;
       logger.logWarning(
-        `Failed to consume message on topic [${this._topic}] : ${itemId} (Message Key: ${messageKey}), but error will be ignored to throw`,
-        error ? `. Due ${error?.message}` : null
+        `Failed to consume message on topic [${this._topic}] : ${itemId} (Message Key: ${messageKey}), but error will be ignored to throw. Due ${error ? `${error?.message}` : null}`
       );
     } catch (error) {
       logger.logWarning(
@@ -642,7 +641,9 @@ class AbstractConsumer {
 
       const result = await this.#markAsProcessingStart(itemId);
       if (!result) {
-        logger.logWarning(`${this.getBrokerType()} consumer is processing`);
+        logger.logWarning(
+          `Another ${this.getBrokerType()} consumer is processing for this item ${itemId} in topic [ ${this._topic} ]`
+        );
         return;
       }
 

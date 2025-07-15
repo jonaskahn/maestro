@@ -3,44 +3,25 @@ const KafkaProducer = require("../src/implementations/brokers/kafka/kafka-produc
 const KafkaConsumer = require("../src/implementations/brokers/kafka/kafka-consumer");
 
 describe("Main Module Exports", () => {
-  test("should export KafkaProducer", () => {
-    // Given: The main module is imported
-    // When: Accessing the KafkaProducer export
-    // Then: It should be defined and match the KafkaProducer implementation
-    expect(mainModule.KafkaProducer).toBeDefined();
-    expect(mainModule.KafkaProducer).toBe(KafkaProducer);
+      test("Given the main module is imported When accessing KafkaProducer export Then it should be defined and match implementation", () => {
+      expect(mainModule.KafkaProducer).toBeDefined();
+      expect(mainModule.KafkaProducer).toBe(KafkaProducer);
   });
-
-  test("should export KafkaConsumer", () => {
-    // Given: The main module is imported
-    // When: Accessing the KafkaConsumer export
-    // Then: It should be defined and match the KafkaConsumer implementation
-    expect(mainModule.KafkaConsumer).toBeDefined();
-    expect(mainModule.KafkaConsumer).toBe(KafkaConsumer);
+      test("Given the main module is imported When accessing KafkaConsumer export Then it should be defined and match implementation", () => {
+      expect(mainModule.KafkaConsumer).toBeDefined();
+      expect(mainModule.KafkaConsumer).toBe(KafkaConsumer);
   });
-
-  test("should export DefaultProducer as alias for KafkaProducer", () => {
-    // Given: The main module is imported
-    // When: Accessing the DefaultProducer export
-    // Then: It should be defined and be an alias for KafkaProducer
-    expect(mainModule.DefaultProducer).toBeDefined();
-    expect(mainModule.DefaultProducer).toBe(KafkaProducer);
-    expect(mainModule.DefaultProducer).toBe(mainModule.KafkaProducer);
+      test("Given the main module is imported When accessing DefaultProducer export Then it should be defined as alias for KafkaProducer", () => {
+      expect(mainModule.DefaultProducer).toBeDefined();
+      expect(mainModule.DefaultProducer).toBe(KafkaProducer);
+      expect(mainModule.DefaultProducer).toBe(mainModule.KafkaProducer);
   });
-
-  test("should export DefaultConsumer as alias for KafkaConsumer", () => {
-    // Given: The main module is imported
-    // When: Accessing the DefaultConsumer export
-    // Then: It should be defined and be an alias for KafkaConsumer
-    expect(mainModule.DefaultConsumer).toBeDefined();
-    expect(mainModule.DefaultConsumer).toBe(KafkaConsumer);
-    expect(mainModule.DefaultConsumer).toBe(mainModule.KafkaConsumer);
+      test("Given the main module is imported When accessing DefaultConsumer export Then it should be defined as alias for KafkaConsumer", () => {
+      expect(mainModule.DefaultConsumer).toBeDefined();
+      expect(mainModule.DefaultConsumer).toBe(KafkaConsumer);
+      expect(mainModule.DefaultConsumer).toBe(mainModule.KafkaConsumer);
   });
-
-  test("should have exactly 4 exports", () => {
-    // Given: The main module is imported
-    // When: Checking the number of exports
-    // Then: There should be exactly 4 exports
-    expect(Object.keys(mainModule).length).toBe(4);
+      test("Given the main module is imported When checking number of exports Then there should be exactly 4 exports", () => {
+      expect(Object.keys(mainModule).length).toBe(4);
   });
 });

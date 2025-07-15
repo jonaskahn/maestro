@@ -18,3 +18,4 @@ global.console = {
 };
 
 process.env.MO_TASK_PROCESSING_BASE_TTL_MS = "10000";
+process.env.MO_DELAY_BASE_TIMEOUT_MS = 0;

@@ -13,62 +13,56 @@ const mockIsDebugEnabled = jest.fn().mockReturnValue(true);
 const mockIsLevelEnabled = jest.fn().mockImplementation(level => level === "debug");
 
 const mockConsoleTransport = jest.fn();
-
-jest.mock("winston", () => ({
+      jest.mock("winston", () => ({
   format: {
-    timestamp: mockTimestamp,
+      timestamp: mockTimestamp,
     colorize: mockColorize,
-    printf: mockPrintf,
-    json: mockJson,
+      printf: mockPrintf,
+      json: mockJson,
     combine: mockCombine,
-    errors: mockErrors,
+      errors: mockErrors,
   },
   createLogger: jest.fn().mockReturnValue({
     info: mockInfo,
     debug: mockDebug,
-    warn: mockWarn,
-    error: mockError,
+      warn: mockWarn,
+      error: mockError,
     isDebugEnabled: mockIsDebugEnabled,
     isLevelEnabled: mockIsLevelEnabled,
   }),
-  transports: {
-    Console: mockConsoleTransport,
+      transports: {
+      Console: mockConsoleTransport,
   },
 }));
 
 const winston = require("winston");
 const {
-  LoggerService,
-  logInfo,
-  logDebug,
-  logWarning,
-  logError,
-  logBatchOperation,
-  logTaskOperation,
-  logConnectionEvent,
-  logConcurrencyStatus,
-  logProcessingStatistics,
+      LoggerService,
+      logInfo,
+      logDebug,
+      logWarning,
+      logError,
+      logBatchOperation,
+      logTaskOperation,
+      logConnectionEvent,
+      logConcurrencyStatus,
+      logProcessingStatistics,
 } = require("../../src/services/logger-service");
 
 describe("LoggerService", () => {
-  let loggerService;
-
-  beforeEach(() => {
-    jest.clearAllMocks();
-    loggerService = new LoggerService();
+      let loggerService;
+      beforeEach(() => {
+      jest.clearAllMocks();
+      loggerService = new LoggerService();
   });
 
   describe("Constructor", () => {
-    test("should create a logger instance with winston", () => {
-      // Given: The LoggerService class is available
-      // When: Creating a new LoggerService instance
-      // Then: Winston createLogger should be called and logger should be defined
-      expect(winston.createLogger).toHaveBeenCalled();
+      test("Given The LoggerService class is available When Creating a new LoggerService instance Then Winston createLogger should be called and logger should be defined", () => {expect(winston.createLogger).toHaveBeenCalled();
       expect(loggerService.logger).toBeDefined();
     });
 
-    test("should use default log level when environment variable is not set", () => {
-      // Given: No LOG_LEVEL environment variable is set
+      test("should use default log level when environment variable is not set", () => {
+        // Given: No LOG_LEVEL environment variable is set
       const originalEnv = process.env;
       process.env = { ...originalEnv };
       delete process.env.LOG_LEVEL;
@@ -81,8 +75,8 @@ describe("LoggerService", () => {
       process.env = originalEnv;
     });
 
-    test("should use environment variable for log level when set", () => {
-      // Given: LOG_LEVEL environment variable is set to "debug"
+      test("should use environment variable for log level when set", () => {
+        // Given: LOG_LEVEL environment variable is set to "debug"
       const originalEnv = process.env;
       process.env = { ...originalEnv, LOG_LEVEL: "debug" };
 
@@ -94,8 +88,8 @@ describe("LoggerService", () => {
       process.env = originalEnv;
     });
 
-    test("should use default log format when environment variable is not set", () => {
-      // Given: No LOG_FORMAT environment variable is set
+      test("should use default log format when environment variable is not set", () => {
+        // Given: No LOG_FORMAT environment variable is set
       const originalEnv = process.env;
       process.env = { ...originalEnv };
       delete process.env.LOG_FORMAT;
@@ -108,8 +102,8 @@ describe("LoggerService", () => {
       process.env = originalEnv;
     });
 
-    test("should use environment variable for log format when set", () => {
-      // Given: LOG_FORMAT environment variable is set to "json"
+      test("should use environment variable for log format when set", () => {
+        // Given: LOG_FORMAT environment variable is set to "json"
       const originalEnv = process.env;
       process.env = { ...originalEnv, LOG_FORMAT: "json" };
 
@@ -123,8 +117,8 @@ describe("LoggerService", () => {
   });
 
   describe("Format Creation", () => {
-    test("should create simple format", () => {
-      // Given: A LoggerService instance
+      test("should create simple format", () => {
+        // Given: A LoggerService instance
       // When: Creating a simple format
       loggerService._createFormat("simple");
 
@@ -135,8 +129,8 @@ describe("LoggerService", () => {
       expect(mockCombine).toHaveBeenCalled();
     });
 
-    test("should create json format", () => {
-      // Given: A LoggerService instance
+      test("should create json format", () => {
+        // Given: A LoggerService instance
       // When: Creating a json format
       loggerService._createFormat("json");
 
@@ -146,8 +140,8 @@ describe("LoggerService", () => {
       expect(mockCombine).toHaveBeenCalled();
     });
 
-    test("should create detailed format", () => {
-      // Given: A LoggerService instance
+      test("should create detailed format", () => {
+        // Given: A LoggerService instance
       // When: Creating a detailed format
       loggerService._createFormat("detailed");
 
@@ -159,8 +153,8 @@ describe("LoggerService", () => {
       expect(mockCombine).toHaveBeenCalled();
     });
 
-    test("should default to simple format for unknown format type", () => {
-      // Given: A LoggerService instance
+      test("should default to simple format for unknown format type", () => {
+        // Given: A LoggerService instance
       // When: Creating an unknown format
       loggerService._createFormat("unknown");
 
@@ -173,8 +167,8 @@ describe("LoggerService", () => {
   });
 
   describe("Transport Creation", () => {
-    test("should create console transport with exception handling", () => {
-      // Given: A LoggerService instance
+      test("should create console transport with exception handling", () => {
+        // Given: A LoggerService instance
       // When: Creating transports
       const transports = loggerService._createTransports();
 
@@ -188,8 +182,8 @@ describe("LoggerService", () => {
   });
 
   describe("Logging Methods", () => {
-    test("should log info messages", () => {
-      // Given: A message and metadata
+      test("should log info messages", () => {
+        // Given: A message and metadata
       const message = "Test info message";
       const metadata = { test: "data" };
 
@@ -200,8 +194,8 @@ describe("LoggerService", () => {
       expect(mockInfo).toHaveBeenCalled();
     });
 
-    test("should log debug messages", () => {
-      // Given: A message and metadata
+      test("should log debug messages", () => {
+        // Given: A message and metadata
       const message = "Test debug message";
       const metadata = { test: "data" };
 
@@ -212,8 +206,8 @@ describe("LoggerService", () => {
       expect(mockDebug).toHaveBeenCalled();
     });
 
-    test("should log warning messages", () => {
-      // Given: A message and metadata
+      test("should log warning messages", () => {
+        // Given: A message and metadata
       const message = "Test warning message";
       const metadata = { test: "data" };
 
@@ -224,8 +218,8 @@ describe("LoggerService", () => {
       expect(mockWarn).toHaveBeenCalled();
     });
 
-    test("should log error messages with error object", () => {
-      // Given: A message, error object, and metadata
+      test("should log error messages with error object", () => {
+        // Given: A message, error object, and metadata
       const message = "Test error message";
       const error = new Error("Test error");
       const metadata = { test: "data" };
@@ -237,8 +231,8 @@ describe("LoggerService", () => {
       expect(mockError).toHaveBeenCalled();
     });
 
-    test("should log error messages without error object", () => {
-      // Given: A message and metadata but no error object
+      test("should log error messages without error object", () => {
+        // Given: A message and metadata but no error object
       const message = "Test error message";
       const metadata = { test: "data" };
 
@@ -251,8 +245,8 @@ describe("LoggerService", () => {
   });
 
   describe("Specialized Logging Methods", () => {
-    test("should log batch operation", () => {
-      // Given: Batch operation details
+      test("should log batch operation", () => {
+        // Given: Batch operation details
       const operation = "process";
       const batchId = "batch123";
       const count = { count: 5 };
@@ -264,8 +258,8 @@ describe("LoggerService", () => {
       expect(mockInfo).toHaveBeenCalled();
     });
 
-    test("should log task operation", () => {
-      // Given: Task operation details
+      test("should log task operation", () => {
+        // Given: Task operation details
       const operation = "complete";
       const taskId = "task123";
       const duration = { duration: 100 };
@@ -277,8 +271,8 @@ describe("LoggerService", () => {
       expect(mockInfo).toHaveBeenCalled();
     });
 
-    test("should log connection event", () => {
-      // Given: Connection event details
+      test("should log connection event", () => {
+        // Given: Connection event details
       const event = "connect";
       const service = "kafka";
 
@@ -289,8 +283,8 @@ describe("LoggerService", () => {
       expect(mockDebug).toHaveBeenCalled();
     });
 
-    test("should log concurrency status", () => {
-      // Given: Concurrency status details
+      test("should log concurrency status", () => {
+        // Given: Concurrency status details
       const active = 3;
       const max = 5;
       const queued = 2;
@@ -302,8 +296,8 @@ describe("LoggerService", () => {
       expect(mockInfo).toHaveBeenCalled();
     });
 
-    test("should log processing statistics", () => {
-      // Given: Processing statistics
+      test("should log processing statistics", () => {
+        // Given: Processing statistics
       const stats = {
         processed: 100,
         failed: 5,
@@ -319,8 +313,8 @@ describe("LoggerService", () => {
   });
 
   describe("Utility Methods", () => {
-    test("should check if debug is enabled", () => {
-      // Given: A LoggerService instance
+      test("should check if debug is enabled", () => {
+        // Given: A LoggerService instance
       // When: Checking if debug is enabled
       const result = loggerService.isDebugEnabled();
 
@@ -329,8 +323,8 @@ describe("LoggerService", () => {
       expect(mockIsDebugEnabled).toHaveBeenCalled();
     });
 
-    test("should check if specific log level is enabled", () => {
-      // Given: A LoggerService instance
+      test("should check if specific log level is enabled", () => {
+        // Given: A LoggerService instance
       // When: Checking if a specific log level is enabled
       const result = loggerService.isLevelEnabled("debug");
 
@@ -341,12 +335,7 @@ describe("LoggerService", () => {
   });
 
   describe("Exported Functions", () => {
-    test("should export working wrapper functions", () => {
-      // Given: The exported wrapper functions
-
-      // When: Calling the wrapper functions
-      // Then: They should not throw errors
-      logInfo("test info");
+      test("Given The exported wrapper functions When Calling the wrapper functions Then They should not throw errors", () => {logInfo("test info");
       logDebug("test debug");
       logWarning("test warning");
       logError("test error");

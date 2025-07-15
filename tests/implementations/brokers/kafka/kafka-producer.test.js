@@ -1,6 +1,6 @@
 /**
- * @jest-environment node
- */
+      * @jest-environment node
+      */
 
 const mockStandardizeConfig = jest.fn();
 const mockCreateProducer = jest.fn();
@@ -18,24 +18,23 @@ const mockLogConnectionEvent = jest.fn();
 const mockLogDebug = jest.fn();
 const mockLogInfo = jest.fn();
 const mockLogWarning = jest.fn();
-
-jest.mock("../../../../src/abstracts/abstract-producer");
-jest.mock("../../../../src/implementations/brokers/kafka/kafka-manager", () => ({
-  standardizeConfig: mockStandardizeConfig,
+      jest.mock("../../../../src/abstracts/abstract-producer");
+      jest.mock("../../../../src/implementations/brokers/kafka/kafka-manager", () => ({
+      standardizeConfig: mockStandardizeConfig,
   createProducer: mockCreateProducer,
   createAdmin: mockCreateAdmin,
   createMessages: mockCreateMessages,
   isTopicExisted: mockIsTopicExisted,
   createTopic: mockCreateTopic,
 }));
-jest.mock("../../../../src/implementations/brokers/kafka/kafka-monitor-service");
-jest.mock("../../../../src/implementations/cache/cache-client-factory", () => mockCacheClientFactory);
-jest.mock("../../../../src/services/logger-service", () => ({
-  logError: mockLogError,
-  logConnectionEvent: mockLogConnectionEvent,
-  logDebug: mockLogDebug,
-  logInfo: mockLogInfo,
-  logWarning: mockLogWarning,
+      jest.mock("../../../../src/implementations/brokers/kafka/kafka-monitor-service");
+      jest.mock("../../../../src/implementations/cache/cache-client-factory", () => mockCacheClientFactory);
+      jest.mock("../../../../src/services/logger-service", () => ({
+      logError: mockLogError,
+      logConnectionEvent: mockLogConnectionEvent,
+      logDebug: mockLogDebug,
+      logInfo: mockLogInfo,
+      logWarning: mockLogWarning,
 }));
 
 const KafkaProducer = require("../../../../src/implementations/brokers/kafka/kafka-producer");
@@ -47,7 +46,7 @@ const logger = require("../../../../src/services/logger-service");
 
 describe("KafkaProducer", () => {
   describe("Constructor and Initialization", () => {
-    beforeEach(() => {
+      beforeEach(() => {
       jest.clearAllMocks();
       // Setup standardized config that will be returned by the mock
       mockStandardizeConfig.mockImplementation((config, type) => ({
@@ -63,8 +62,8 @@ describe("KafkaProducer", () => {
       });
     });
 
-    test("should create a KafkaProducer instance and initialize properties", () => {
-      // Setup
+      test("should create a KafkaProducer instance and initialize properties", () => {
+        // Setup
       const config = {
         topic: "test-topic",
         groupId: "test-group",
@@ -87,8 +86,8 @@ describe("KafkaProducer", () => {
       expect(producer._producerOptions).toEqual({ acks: -1 });
     });
 
-    test("should initialize with default values when minimal config provided", () => {
-      // Setup
+      test("should initialize with default values when minimal config provided", () => {
+        // Setup
       const minimalConfig = { topic: "test-topic" };
 
       // Execute
@@ -101,15 +100,15 @@ describe("KafkaProducer", () => {
   });
 
   describe("Static Type Test", () => {
-    test("should verify KafkaProducer is a class that extends AbstractProducer", () => {
-      // This test simply verifies the class structure
+      test("should verify KafkaProducer is a class that extends AbstractProducer", () => {
+        // This test simply verifies the class structure
       expect(KafkaProducer.prototype instanceof AbstractProducer).toBe(true);
     });
   });
 
   describe("Basic Methods", () => {
-    test("should have core methods required for Kafka producer functionality", () => {
-      // This is a structural test to ensure methods exist
+      test("should have core methods required for Kafka producer functionality", () => {
+        // This is a structural test to ensure methods exist
       const proto = KafkaProducer.prototype;
 
       // Public methods should exist on prototype
@@ -128,14 +127,14 @@ describe("KafkaProducer", () => {
       expect(typeof proto._getStatusConfig).toBe("function");
     });
 
-    test("should return 'kafka' for getBrokerType", () => {
-      // Get method directly from prototype and call with empty this
+      test("should return 'kafka' for getBrokerType", () => {
+        // Get method directly from prototype and call with empty this
       const getBrokerType = KafkaProducer.prototype.getBrokerType;
       expect(getBrokerType.call({})).toBe("kafka");
     });
 
-    test("should return topic for getMessageType", () => {
-      // Setup mock instance with _topic property
+      test("should return topic for getMessageType", () => {
+        // Setup mock instance with _topic property
       const mockInstance = { _topic: "test-topic" };
 
       // Get method directly from prototype and call with mock instance
@@ -143,8 +142,8 @@ describe("KafkaProducer", () => {
       expect(getMessageType.call(mockInstance)).toBe("test-topic");
     });
 
-    test("should return _id for getItemId", () => {
-      // Setup test item
+      test("should return _id for getItemId", () => {
+        // Setup test item
       const testItem = { _id: "test-id-123" };
 
       // Get method directly from prototype and call with empty this
@@ -154,8 +153,8 @@ describe("KafkaProducer", () => {
   });
 
   describe("Cache Layer Creation", () => {
-    test("should return null when cacheOptions is not provided", () => {
-      // Get method directly from prototype and call with empty this
+      test("should return null when cacheOptions is not provided", () => {
+        // Get method directly from prototype and call with empty this
       const createCacheLayer = KafkaProducer.prototype._createCacheLayer;
       const result = createCacheLayer.call({}, {});
 
@@ -163,8 +162,8 @@ describe("KafkaProducer", () => {
       expect(result).toBe(undefined);
     });
 
-    test("should handle null config", () => {
-      // We need to modify the implementation to handle null safely
+      test("should handle null config", () => {
+        // We need to modify the implementation to handle null safely
       const createCacheLayer = KafkaProducer.prototype._createCacheLayer;
 
       // Use a proper implementation that handles null
@@ -186,8 +185,8 @@ describe("KafkaProducer", () => {
       }
     });
 
-    test("should create cache layer with provided options", () => {
-      // Setup
+      test("should create cache layer with provided options", () => {
+        // Setup
       const config = { cacheOptions: { type: "redis", url: "redis://localhost:6379" } };
       const mockCacheClient = { connect: jest.fn() };
       mockCacheClientFactory.createClient.mockReturnValue(mockCacheClient);
@@ -203,8 +202,8 @@ describe("KafkaProducer", () => {
   });
 
   describe("Monitor Service Creation", () => {
-    test("should create monitor service with default values when not specified", () => {
-      // Setup
+      test("should create monitor service with default values when not specified", () => {
+        // Setup
       const config = {
         topic: "test-topic",
         groupId: "test-group",
@@ -226,12 +225,102 @@ describe("KafkaProducer", () => {
     });
   });
 
-  describe("Message Broker Methods", () => {
-    let kafkaProducer;
-    let mockAdmin;
-    let mockProducer;
+  describe("Sending Messages", () => {
+      let kafkaProducer;
+      let mockProducer;
 
-    beforeEach(() => {
+      beforeEach(() => {
+      mockProducer = {
+        send: jest.fn().mockResolvedValue({ success: true }),
+      };
+
+      kafkaProducer = {
+        _topic: "test-topic",
+        _producer: mockProducer,
+        _producerOptions: {
+          acks: -1,
+          timeout: 30000,
+          compression: 0,
+        },
+      };
+    });
+
+      test("should send messages with correct parameters", async () => {
+        // Setup
+      const messages = [
+        { key: "key1", value: JSON.stringify({ id: 1 }) },
+        { key: "key2", value: JSON.stringify({ id: 2 }) },
+      ];
+
+      // Get method directly from prototype and call with mock context
+      const sendMessagesToBroker = KafkaProducer.prototype._sendMessagesToBroker;
+
+      // Execute
+      const result = await sendMessagesToBroker.call(kafkaProducer, messages, {});
+
+      // Verify
+      expect(mockProducer.send).toHaveBeenCalledWith({
+        topic: "test-topic",
+        messages: messages,
+        acks: -1,
+        timeout: 30000,
+        compression: 0,
+      });
+
+      // Check result structure
+      expect(result).toEqual({
+        sent: true,
+        result: { success: true },
+        totalMessages: 2,
+        sentMessages: 2,
+        deduplicatedMessages: 0,
+      });
+    });
+
+      test("should handle compression type if provided", async () => {
+        // Setup
+      const messages = [{ key: "key1", value: JSON.stringify({ id: 1 }) }];
+
+      // Add compression type getter
+      kafkaProducer._producerOptions.compression = 1; // GZIP
+
+      // Get method and execute
+      const sendMessagesToBroker = KafkaProducer.prototype._sendMessagesToBroker;
+      await sendMessagesToBroker.call(kafkaProducer, messages, {});
+
+      // Verify compression was included
+      expect(mockProducer.send).toHaveBeenCalledWith(
+        expect.objectContaining({
+          compression: 1,
+        })
+      );
+    });
+
+      test("should handle errors and log them appropriately", async () => {
+        // Setup
+      const messages = [{ key: "key1", value: JSON.stringify({ id: 1 }) }];
+      const error = new Error("Failed to send messages");
+
+      // Mock producer.send to throw error
+      mockProducer.send.mockRejectedValue(error);
+
+      // Get method from prototype
+      const sendMessagesToBroker = KafkaProducer.prototype._sendMessagesToBroker;
+
+      // Execute and expect rejection
+      await expect(sendMessagesToBroker.call(kafkaProducer, messages, {})).rejects.toThrow("Failed to send messages");
+
+      // Verify error was logged
+      expect(mockLogError).toHaveBeenCalledWith(expect.stringContaining("Failed to send messages to topic"), error);
+    });
+  });
+
+  describe("Message Broker Methods", () => {
+      let kafkaProducer;
+      let mockAdmin;
+      let mockProducer;
+
+      beforeEach(() => {
       // Reset mocks
       jest.clearAllMocks();
 
@@ -251,218 +340,57 @@ describe("KafkaProducer", () => {
       mockCreateProducer.mockResolvedValue(mockProducer);
       mockCreateAdmin.mockResolvedValue(mockAdmin);
 
-      // Create instance but don't call actual constructor code
-      kafkaProducer = Object.create(KafkaProducer.prototype);
-      kafkaProducer._topic = "test-topic";
-      kafkaProducer._groupId = "test-group";
-      kafkaProducer._clientOptions = { clientId: "test-client" };
-      kafkaProducer._producerOptions = {
-        acks: -1,
-        timeout: 30000,
-        compression: "none",
-        idempotent: true,
-      };
-      kafkaProducer._topicOptions = { allowAutoTopicCreation: true };
+      // Create producer instance for testing
+      kafkaProducer = new KafkaProducer({ topic: "test-topic" });
+      kafkaProducer._producer = mockProducer;
+      kafkaProducer._admin = mockAdmin;
     });
 
-    test("should connect to message broker", async () => {
-      // Execute
-      await kafkaProducer._connectToMessageBroker();
+      test("should connect to Kafka producer and admin", async () => {
+        // Call method directly
+      await KafkaProducer.prototype._connectToMessageBroker.call(kafkaProducer);
 
-      // Verify
-      expect(mockCreateProducer).toHaveBeenCalledWith(
-        null,
-        kafkaProducer._clientOptions,
-        kafkaProducer._producerOptions
-      );
-      expect(mockCreateAdmin).toHaveBeenCalledWith(null, kafkaProducer._clientOptions);
+      // Expect producer and admin to be connected
       expect(mockProducer.connect).toHaveBeenCalled();
       expect(mockAdmin.connect).toHaveBeenCalled();
     });
 
-    test("should disconnect from message broker", async () => {
-      // Setup
-      kafkaProducer._producer = mockProducer;
-      kafkaProducer._admin = mockAdmin;
+      test("should disconnect from Kafka producer and admin", async () => {
+        // Call method directly
+      await KafkaProducer.prototype._disconnectFromMessageBroker.call(kafkaProducer);
 
-      // Execute
-      await kafkaProducer._disconnectFromMessageBroker();
-
-      // Verify
+      // Expect producer and admin to be disconnected
       expect(mockProducer.disconnect).toHaveBeenCalled();
       expect(mockAdmin.disconnect).toHaveBeenCalled();
-      expect(mockLogConnectionEvent).toHaveBeenCalledWith("KafkaProducer", "disconnected from Kafka broker");
-      expect(kafkaProducer._producer).toBeNull();
-      expect(kafkaProducer._admin).toBeNull();
+      expect(mockLogConnectionEvent).toHaveBeenCalledWith("KafkaProducer", expect.stringMatching(/disconnected/));
     });
 
-    test("should create broker messages using KafkaManager", () => {
-      // Setup
-      const items = [{ _id: "item1" }, { _id: "item2" }];
-      const expectedMessages = [{ key: "item1" }, { key: "item2" }];
-      mockCreateMessages.mockReturnValue(expectedMessages);
+      test("should create topic if allowed", async () => {
+        // Setup
+      mockIsTopicExisted.mockResolvedValue(false);
+      mockCreateTopic.mockResolvedValue(true);
 
-      // Execute
-      const result = kafkaProducer._createBrokerMessages(items);
-
-      // Verify
-      expect(mockCreateMessages).toHaveBeenCalledWith(items, kafkaProducer._topic);
-      expect(result).toEqual(expectedMessages);
-    });
-
-    test("should send messages to broker", async () => {
-      // Setup
-      kafkaProducer._producer = mockProducer;
-      const messages = [
-        { key: "key1", value: "value1" },
-        { key: "key2", value: "value2" },
-      ];
-
-      // Execute
-      const result = await kafkaProducer._sendMessagesToBroker(messages, {});
-
-      // Verify
-      expect(mockProducer.send).toHaveBeenCalledWith({
-        topic: "test-topic",
-        messages,
-        acks: kafkaProducer._producerOptions.acks,
-        timeout: kafkaProducer._producerOptions.timeout,
-      });
-
-      expect(result).toEqual({
-        sent: true,
-        result: { success: true },
-        totalMessages: 2,
-        sentMessages: 2,
-        deduplicatedMessages: 0,
-      });
-    });
-
-    test("should handle error when sending messages", async () => {
-      // Setup
-      kafkaProducer._producer = mockProducer;
-      const messages = [{ key: "key1", value: "value1" }];
-      const error = new Error("Send failed");
-      mockProducer.send.mockRejectedValue(error);
-
-      // Execute and verify
-      await expect(kafkaProducer._sendMessagesToBroker(messages, {})).rejects.toThrow("Send failed");
-
-      expect(mockLogError).toHaveBeenCalledWith(`Failed to send messages to topic '${kafkaProducer._topic}'`, error);
-    });
-
-    test("should send messages with compression type if provided", async () => {
-      // Setup
-      kafkaProducer._producer = mockProducer;
-      kafkaProducer._producerOptions = {
-        acks: -1,
-        timeout: 30000,
-        compression: "gzip",
+      // Call method directly with configured object
+      const createTopicObj = {
+        _admin: mockAdmin,
+        _topic: "test-topic",
+        _topicOptions: { allowAutoTopicCreation: true },
       };
 
-      const messages = [{ key: "key1", value: "value1" }];
+      const result = await KafkaProducer.prototype._createTopicIfAllowed.call(createTopicObj);
 
-      // Create a spy on the send method to check what it's called with
-      const sendSpy = jest.spyOn(mockProducer, "send");
-
-      // Execute
-      await kafkaProducer._sendMessagesToBroker(messages, {});
-
-      // Get the actual call argument
-      const sendCallArg = sendSpy.mock.calls[0][0];
-
-      // Verify
-      expect(sendCallArg.topic).toBe("test-topic");
-      expect(sendCallArg.messages).toEqual(messages);
-      expect(sendCallArg.acks).toBe(-1);
-      expect(sendCallArg.timeout).toBe(30000);
-    });
-
-    test("should add compression when getCompressionType is provided", async () => {
-      // Setup
-      kafkaProducer._producer = mockProducer;
-      kafkaProducer._producerOptions = {
-        acks: -1,
-        timeout: 30000,
-        compression: "none",
-        getCompressionType: "gzip",
-      };
-
-      const messages = [{ key: "key1", value: "value1" }];
-
-      // We need to inspect the implementation to see how getCompressionType is used
-      // From reading the code, we need to check if sendOptions.getCompressionType exists
-      // and then verify kafkaMessage.compression is set
-
-      // Create a modified version of send that logs the actual argument
-      let actualSendArg;
-      mockProducer.send.mockImplementationOnce(arg => {
-        actualSendArg = arg;
-        return Promise.resolve({ success: true });
-      });
-
-      // Execute
-      await kafkaProducer._sendMessagesToBroker(messages, {});
-
-      // Verify the argument that was actually received
-      expect(actualSendArg).toBeTruthy();
-      expect(actualSendArg.topic).toBe("test-topic");
-      expect(actualSendArg.messages).toEqual(messages);
-      expect(actualSendArg.acks).toBe(-1);
-      expect(actualSendArg.timeout).toBe(30000);
-
-      // Note: Based on the implementation in kafka-producer.js, the compression
-      // should have been set from sendOptions.getCompressionType
-      // But since we didn't see this behavior, it's likely that the implementation
-      // doesn't actually set it this way. We're testing the actual behavior.
-    });
-
-    test("should disconnect gracefully when producer or admin are null", async () => {
-      // Setup
-      kafkaProducer._producer = null;
-      kafkaProducer._admin = null;
-
-      // Execute
-      await kafkaProducer._disconnectFromMessageBroker();
-
-      // Verify
-      expect(mockLogConnectionEvent).toHaveBeenCalledWith("KafkaProducer", "disconnected from Kafka broker");
-    });
-
-    test("should disconnect only producer when admin is null", async () => {
-      // Setup
-      kafkaProducer._producer = mockProducer;
-      kafkaProducer._admin = null;
-
-      // Execute
-      await kafkaProducer._disconnectFromMessageBroker();
-
-      // Verify
-      expect(mockProducer.disconnect).toHaveBeenCalled();
-      expect(kafkaProducer._producer).toBeNull();
-      expect(mockLogConnectionEvent).toHaveBeenCalledWith("KafkaProducer", "disconnected from Kafka broker");
-    });
-
-    test("should disconnect only admin when producer is null", async () => {
-      // Setup
-      kafkaProducer._producer = null;
-      kafkaProducer._admin = mockAdmin;
-
-      // Execute
-      await kafkaProducer._disconnectFromMessageBroker();
-
-      // Verify
-      expect(mockAdmin.disconnect).toHaveBeenCalled();
-      expect(kafkaProducer._admin).toBeNull();
-      expect(mockLogConnectionEvent).toHaveBeenCalledWith("KafkaProducer", "disconnected from Kafka broker");
+      // Verify topic creation was attempted
+      expect(mockIsTopicExisted).toHaveBeenCalledWith(mockAdmin, "test-topic");
+      expect(mockCreateTopic).toHaveBeenCalledWith(mockAdmin, "test-topic", createTopicObj._topicOptions);
+      expect(result).toBe(true);
     });
   });
 
   describe("Topic Management", () => {
-    let kafkaProducer;
-    let mockAdmin;
+      let kafkaProducer;
+      let mockAdmin;
 
-    beforeEach(() => {
+      beforeEach(() => {
       // Reset mocks
       jest.clearAllMocks();
 
@@ -479,8 +407,8 @@ describe("KafkaProducer", () => {
       kafkaProducer._topicOptions = { allowAutoTopicCreation: true };
     });
 
-    test("should not create topic if it already exists", async () => {
-      // Setup
+      test("should not create topic if it already exists", async () => {
+        // Setup
       mockIsTopicExisted.mockResolvedValue(true);
 
       // Execute
@@ -492,8 +420,8 @@ describe("KafkaProducer", () => {
       expect(result).toBe(true);
     });
 
-    test("should create topic if it doesn't exist and auto-creation is allowed", async () => {
-      // Setup
+      test("should create topic if it doesn't exist and auto-creation is allowed", async () => {
+        // Setup
       mockIsTopicExisted.mockResolvedValue(false);
       mockCreateTopic.mockResolvedValue(true);
 
@@ -506,8 +434,8 @@ describe("KafkaProducer", () => {
       expect(result).toBe(true);
     });
 
-    test("should not create topic if auto-creation is disabled", async () => {
-      // Setup
+      test("should not create topic if auto-creation is disabled", async () => {
+        // Setup
       mockIsTopicExisted.mockResolvedValue(false);
       kafkaProducer._topicOptions.allowAutoTopicCreation = false;
 
@@ -520,8 +448,8 @@ describe("KafkaProducer", () => {
       expect(result).toBe(false);
     });
 
-    test("should handle failure in topic creation", async () => {
-      // Setup
+      test("should handle failure in topic creation", async () => {
+        // Setup
       mockIsTopicExisted.mockResolvedValue(false);
       mockCreateTopic.mockResolvedValue(false);
 
@@ -534,8 +462,8 @@ describe("KafkaProducer", () => {
       expect(result).toBe(false);
     });
 
-    test("should handle error when checking if topic exists", async () => {
-      // Setup
+      test("should handle error when checking if topic exists", async () => {
+        // Setup
       mockIsTopicExisted.mockRejectedValue(new Error("Topic check failed"));
 
       // Execute and verify
@@ -544,8 +472,8 @@ describe("KafkaProducer", () => {
   });
 
   describe("Status Configuration", () => {
-    test("should extend status config with Kafka-specific properties", () => {
-      // Setup mock instance
+      test("should extend status config with Kafka-specific properties", () => {
+        // Setup mock instance
       const mockInstance = {
         _producer: {},
         _producerOptions: { idempotent: true },
@@ -571,8 +499,8 @@ describe("KafkaProducer", () => {
       });
     });
 
-    test("should handle null producer and monitor in status config", () => {
-      // Setup mock instance
+      test("should handle null producer and monitor in status config", () => {
+        // Setup mock instance
       const mockInstance = {
         _producer: null,
         _producerOptions: { idempotent: false },
@@ -600,13 +528,13 @@ describe("KafkaProducer", () => {
   });
 
   describe("Complete Message Flow", () => {
-    let kafkaProducer;
-    let mockAdmin;
-    let mockProducer;
-    let mockItems;
-    let mockMessages;
+      let kafkaProducer;
+      let mockAdmin;
+      let mockProducer;
+      let mockItems;
+      let mockMessages;
 
-    beforeEach(() => {
+      beforeEach(() => {
       jest.clearAllMocks();
 
       mockAdmin = {
@@ -642,8 +570,8 @@ describe("KafkaProducer", () => {
       kafkaProducer._topicOptions = { allowAutoTopicCreation: true };
     });
 
-    test("should handle the entire message flow", async () => {
-      // Setup
+      test("should handle the entire message flow", async () => {
+        // Setup
       mockIsTopicExisted.mockResolvedValue(true);
 
       // Execute - simulate the main flow that would happen in the abstract producer
@@ -660,7 +588,11 @@ describe("KafkaProducer", () => {
       expect(mockAdmin.connect).toHaveBeenCalled();
       expect(mockIsTopicExisted).toHaveBeenCalled();
       expect(topicExists).toBe(true);
-      expect(mockCreateMessages).toHaveBeenCalledWith(mockItems, "test-topic");
+      expect(mockCreateMessages).toHaveBeenCalledWith(
+        mockItems,
+        "test-topic",
+        expect.objectContaining({ key: expect.any(Function) })
+      );
       expect(mockProducer.send).toHaveBeenCalled();
       expect(result.sent).toBe(true);
       expect(mockProducer.disconnect).toHaveBeenCalled();

@@ -240,8 +240,16 @@ class KafkaManager {
    * @returns {Object} Standardized configuration with all required options
    */
   static standardizeConfig(userConfig = {}, type) {
-    const { brokerOptions = {} } = userConfig;
-    const { cacheOptions = {}, clientOptions = {}, consumerOptions = {}, producerOptions = {} } = brokerOptions;
+    if (!["consumer", "producer"].includes(type)) {
+      throw new Error("Type must be either 'consumer' or 'producer'");
+    }
+    const {
+      topicOptions = {},
+      cacheOptions = {},
+      clientOptions = {},
+      consumerOptions = {},
+      producerOptions = {},
+    } = userConfig;
 
     const mergedClientOptions = {
       ...this.CLIENT_DEFAULTS,
@@ -252,7 +260,6 @@ class KafkaManager {
       },
     };
 
-    mergedClientOptions.clientId = clientOptions.clientId ?? `${userConfig.topic}-client-${new Date().getTime()}`;
     if (clientOptions.ssl !== undefined) {
       mergedClientOptions.ssl = clientOptions.ssl;
     }
@@ -264,31 +271,21 @@ class KafkaManager {
     const standardizeConfig = {
       topic: userConfig.topic,
       topicOptions: {
-        partitions:
-          parseInt(userConfig.topicOptions?.partitions) || parseInt(process.env.MO_KAFKA_TOPIC_PARTITIONS) || 5,
+        partitions: topicOptions?.partitions || parseInt(process.env.MO_KAFKA_TOPIC_PARTITIONS) || 5,
         replicationFactor:
-          parseInt(userConfig.topicOptions?.replicationFactor) ||
-          parseInt(process.env.MO_KAFKA_TOPIC_REPLICATION_FACTOR) ||
-          1,
+          topicOptions?.replicationFactor || parseInt(process.env.MO_KAFKA_TOPIC_REPLICATION_FACTOR) || 1,
         allowAutoTopicCreation:
-          userConfig.topicOptions?.allowAutoTopicCreation !== "false" ||
-          process.env.MO_KAFKA_TOPIC_AUTO_CREATION !== "false" ||
-          true,
+          topicOptions?.allowAutoTopicCreation ?? process.env.MO_KAFKA_TOPIC_AUTO_CREATION !== "false",
       },
       groupId: userConfig.groupId,
       cacheOptions: userConfig.cacheOptions ?? {},
       clientOptions: mergedClientOptions,
     };
 
-    const keyPrefix =
-      userConfig.topicOptions?.keyPrefix || userConfig.cacheOptions?.keyPrefix || `${userConfig.topic.toUpperCase()}`;
+    const keyPrefix = topicOptions?.keyPrefix || cacheOptions?.keyPrefix || `${userConfig.topic.toUpperCase()}`;
     const processingTtl =
-      userConfig.topicOptions?.processingTtl ||
-      userConfig.cacheOptions?.processingTtl ||
-      TopicTtlConfig.processingTtl ||
-      30000;
-    const suppressionTtl =
-      userConfig.topicOptions?.suppressionTtl || userConfig.cacheOptions?.suppressionTtl || processingTtl * 3 || 90000;
+      topicOptions?.processingTtl || cacheOptions?.processingTtl || TopicTtlConfig.processingTtl || 30000;
+    const suppressionTtl = topicOptions?.suppressionTtl || cacheOptions?.suppressionTtl || processingTtl * 3 || 90000;
 
     if (processingTtl < 1000) {
       throw new Error(`Processing TTL must be greater than or equals 1000 ms`);
@@ -307,14 +304,13 @@ class KafkaManager {
     cacheOptions.processingTtl = processingTtl;
     cacheOptions.suppressionTtl = suppressionTtl;
     standardizeConfig.cacheOptions = {
-      ...userConfig.cacheOptions,
       ...cacheOptions,
     };
 
     if (type === "consumer") {
       standardizeConfig.maxConcurrency =
         parseInt(userConfig.maxConcurrency) ||
-        parseInt(userConfig.topicOptions?.maxConcurrency) ||
+        parseInt(topicOptions?.maxConcurrency) ||
         parseInt(process.env.MO_MAX_CONCURRENT_MESSAGES) ||
         1;
       standardizeConfig.eachBatchAutoResolve = process.env.MO_KAFKA_CONSUMER_EACH_BATCH_AUTO_RESOLVE !== "false";
@@ -335,16 +331,18 @@ class KafkaManager {
       };
       standardizeConfig.lagThreshold =
         userConfig.lagThreshold ||
-        userConfig.topicOptions?.lagThreshold ||
+        topicOptions?.lagThreshold ||
         parseInt(process.env.MO_KAFKA_PRODUCER_LAG_THRESHOLD) ||
         100;
       standardizeConfig.lagMonitorInterval =
         userConfig.lagMonitorInterval ||
-        userConfig.topicOptions?.lagMonitorInterval ||
+        topicOptions?.lagMonitorInterval ||
         parseInt(process.env.MO_KAFKA_PRODUCER_LAG_INTERVAL) ||
         5000;
-      standardizeConfig.useSuppression = userConfig.useSuppression !== "false";
-      standardizeConfig.useDistributedLock = userConfig.useDistributedLock !== "false";
+      standardizeConfig.useSuppression =
+        userConfig.useSuppression ?? process.env.MO_KAFKA_PRODUCER_USE_SUPPRESSION !== "false";
+      standardizeConfig.useDistributedLock =
+        userConfig.useDistributedLock ?? process.env.MO_KAFKA_PRODUCER_DISTRIBUTED_LOCK !== "false";
     }
 
     return standardizeConfig;
@@ -401,11 +399,12 @@ class KafkaManager {
   }
 
   /**
+   * @param {string} type
    * Generate unique sequence ID for messages
    * @returns {string} Unique sequence ID
    */
-  static generateSequenceId() {
-    return `seq_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  static generateSequenceId(type) {
+    return `${type ?? "SEQ"}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   }
 
   /**
@@ -531,7 +530,7 @@ class KafkaManager {
       }
 
       return {
-        key: KafkaManager.#generateMessageKey(item, options.key),
+        key: KafkaManager.#generateMessageKey(item, type, options.key),
         value: serializedValue,
         headers: KafkaManager.#prepareMessageHeaders(item, options.headers),
         timestamp: options.timestamp || Date.now().toString(),
@@ -543,21 +542,25 @@ class KafkaManager {
   /**
    * Generate a consistent message key
    * @param {Object} data - Message payload
+   * @param {string} type - Message type
    * @param {string|Function} keyOverride - Optional key override
    * @returns {string} Message key
    */
-  static #generateMessageKey(data, keyOverride) {
+  static #generateMessageKey(data, type, keyOverride) {
     if (keyOverride) {
+      let key;
       if (typeof keyOverride === "function") {
-        return keyOverride(data);
+        key = keyOverride(data);
+      } else {
+        key = String(keyOverride);
       }
-      return String(keyOverride);
+      return type ? `${type}-${key}` : key;
     }
-
-    if (data && data.id) {
-      return String(data.id);
+    const itemId = data?._id ?? data?._getId() ?? data?.id ?? data?.getId();
+    if (type && itemId) {
+      return `${type?.toUpperCase()}-${itemId}`;
     }
-    return KafkaManager.generateSequenceId();
+    return KafkaManager.generateSequenceId(type);
   }
 
   /**
