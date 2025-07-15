@@ -58,7 +58,7 @@ describe("TtlConfig", () => {
       const delayBaseTimeout = TtlConfig.getPrimaryTTL("DELAY_BASE_TIMEOUT_MS");
 
       // Assert
-      expect(delayBaseTimeout).toBe(3000);
+      expect(delayBaseTimeout).toBe(1000);
       expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Invalid environment value"));
     });
 

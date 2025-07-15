@@ -547,6 +547,7 @@ class KafkaManager {
    * @returns {string} Message key
    */
   static #generateMessageKey(data, type, keyOverride) {
+    const delta = new Date().getTime();
     if (keyOverride) {
       let key;
       if (typeof keyOverride === "function") {
@@ -554,11 +555,11 @@ class KafkaManager {
       } else {
         key = String(keyOverride);
       }
-      return type ? `${type}-${key}` : key;
+      return type ? `${type}-${key}-${delta}` : `${key}-${delta}`;
     }
     const itemId = data?._id ?? data?._getId() ?? data?.id ?? data?.getId();
     if (type && itemId) {
-      return `${type?.toUpperCase()}-${itemId}`;
+      return `${type?.toUpperCase()}-${itemId}-${delta}`;
     }
     return KafkaManager.generateSequenceId(type);
   }

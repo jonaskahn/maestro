@@ -25,8 +25,8 @@ class ProducerCronjob {
     this.producer = new OrderProducer({
       topic: "ecommerce-orders",
       topicOptions: {
-        processingTtl: 3_000,
-        lagThreshold: 100,
+        processingTtl: 30_000,
+        lagThreshold: 1000,
         lagMonitorInterval: 5000,
       },
     });

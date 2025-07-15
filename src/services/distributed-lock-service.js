@@ -84,14 +84,18 @@ class DistributedLockService {
 
   /**
    * Attempts to acquire lock with exponential backoff retry
+   *
+   * @param {number} lockTtl - Expect time to lock
    * @param {number} maxWaitTime - Maximum milliseconds to wait for lock
    * @returns {Promise<Object>} Result object with success status
    */
-  async #attemptLockAcquisition(maxWaitTime) {
+  async #attemptLockAcquisition(lockTtl, maxWaitTime) {
+    const realLockTime = lockTtl ?? this.ttl;
+    const realMaxWaitTime = maxWaitTime ?? realLockTime * 3;
     const startTime = Date.now();
     let attemptCount = 0;
 
-    while (Date.now() - startTime < maxWaitTime) {
+    while (Date.now() - startTime < realMaxWaitTime) {
       attemptCount++;
 
       try {
@@ -99,7 +103,7 @@ class DistributedLockService {
           throw new Error("No cache layer available for lock operations");
         }
 
-        const result = await this.cacheLayer.setIfNotExists(this.lockKey, this.lockValue, this.ttl);
+        const result = await this.cacheLayer.setIfNotExists(this.lockKey, this.lockValue, realLockTime);
 
         if (result) {
           logger.logDebug(`Lock acquired: ${this.lockKey} (attempt ${attemptCount})`);
@@ -214,14 +218,15 @@ class DistributedLockService {
    * Uses exponential backoff with jitter for retries to reduce contention.
    * Automatically starts background refresh to maintain the lock if acquired.
    *
+   * @param {number} lockTtl - Expect time to lock
    * @param {number} maxWaitTime - Maximum time to wait for lock acquisition in milliseconds
    * @returns {Promise<boolean>} True if lock was successfully acquired
    * @throws {Error} When lock acquisition fails due to cache errors
    */
-  async acquire(maxWaitTime = TtlConfig.maxWaitTimeMs) {
+  async acquire(lockTtl, maxWaitTime) {
     await this.#ensureCacheInitialized();
 
-    const acquisitionResult = await this.#attemptLockAcquisition(maxWaitTime);
+    const acquisitionResult = await this.#attemptLockAcquisition(lockTtl, maxWaitTime);
 
     if (acquisitionResult.success) {
       this.isLocked = LOCK_STATES.LOCKED;

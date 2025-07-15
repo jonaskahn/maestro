@@ -15,7 +15,7 @@
 const logger = require("../services/logger-service");
 
 const PRIMARY_TTL_VALUES = {
-  DELAY_BASE_TIMEOUT_MS: 3_000,
+  DELAY_BASE_TIMEOUT_MS: 1_000,
   TASK_PROCESSING_BASE_TTL: 30_000,
   NETWORK_OPERATION_BASE_TIMEOUT: 5_000,
   RETRY_BASE_INTERVAL: 3_000,
@@ -70,10 +70,10 @@ class TtlConfig {
     };
 
     const derived = {
-      DISTRIBUTED_LOCK_TTL: this.getDerivedTTL("DISTRIBUTED_LOCK_TTL", () => base.TASK_PROCESSING_BASE_TTL * 3),
+      DISTRIBUTED_LOCK_TTL: this.getDerivedTTL("DISTRIBUTED_LOCK_TTL", () => base.TASK_PROCESSING_BASE_TTL * 2),
       DISTRIBUTED_LOCK_MAX_WAIT_TIME: this.getDerivedTTL(
         "DISTRIBUTED_LOCK_MAX_WAIT_TIME",
-        () => base.TASK_PROCESSING_BASE_TTL * 3
+        () => base.TASK_PROCESSING_BASE_TTL * 5
       ),
       DISTRIBUTED_LOCK_RETRY_DELAY: this.getDerivedTTL(
         "DISTRIBUTED_LOCK_RETRY_DELAY",

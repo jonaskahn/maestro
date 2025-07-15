@@ -23,7 +23,7 @@ class ConsumerDaemon {
     this.consumer = new OrderConsumer({
       topic: "ecommerce-orders",
       topicOptions: {
-        processingTtl: 3_000,
+        processingTtl: 30_000,
         maxConcurrency: 10,
       },
     });
