@@ -25,12 +25,6 @@ class KafkaMonitorService extends AbstractMonitorService {
     this._clientOptions = config.clientOptions;
   }
 
-  async connect() {
-    await super.connect();
-    this._admin = await KafkaManager.createAdmin(null, this._clientOptions);
-    await this._admin.connect();
-  }
-
   /**
    * Get the broker type
    * @returns {string} Broker type
@@ -72,6 +66,12 @@ class KafkaMonitorService extends AbstractMonitorService {
       cpuUsage: 0,
       networkLatency: 0,
     };
+  }
+
+  async connect() {
+    await super.connect();
+    this._admin = await KafkaManager.createAdmin(null, this._clientOptions);
+    await this._admin.connect();
   }
 
   async _fetchCurrentLag() {

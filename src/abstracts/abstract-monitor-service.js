@@ -101,21 +101,7 @@ class AbstractMonitorService {
     );
   }
 
-  /**
-   * Gets environment value with fallback to default
-   * @param {Array<string>} keys - Environment variable keys to check
-   * @param {*} defaultValue - Default value if no environment variable found
-   * @returns {*} Environment value or default
-   */
-  getEnvironmentValueOrDefault(keys, defaultValue) {
-    for (const key of keys) {
-      const value = process.env[key];
-      if (value !== undefined) {
-        return parseInt(value);
-      }
-    }
-    return defaultValue;
-  }
+  // --- Public API ---
 
   /**
    * Returns the broker type identifier
@@ -225,6 +211,15 @@ class AbstractMonitorService {
   }
 
   /**
+   * Gets consumer lag metrics from the message broker
+   * @returns {Promise<Object>} Lag metrics object with totalLag, maxPartitionLag, avgLag, and lagThreshold
+   * @throws {Error} When method is not implemented by subclass
+   */
+  async getConsumerLag() {
+    throw new Error("getConsumerLag method must be implemented by subclass");
+  }
+
+  /**
    * Collects resource metrics from system
    * @returns {Promise<Object>} Resource metrics
    */
@@ -239,15 +234,6 @@ class AbstractMonitorService {
         networkLatency: 0,
       };
     }
-  }
-
-  /**
-   * Gets consumer lag metrics from the message broker
-   * @returns {Promise<Object>} Lag metrics object with totalLag, maxPartitionLag, avgLag, and lagThreshold
-   * @throws {Error} When method is not implemented by subclass
-   */
-  async getConsumerLag() {
-    throw new Error("getConsumerLag method must be implemented by subclass");
   }
 
   /**
@@ -440,6 +426,22 @@ class AbstractMonitorService {
   async getRecommendedDelay() {
     const status = await this.getBackpressureStatus();
     return status.recommendedDelay || 0;
+  }
+
+  /**
+   * Gets environment value with fallback to default
+   * @param {Array<string>} keys - Environment variable keys to check
+   * @param {*} defaultValue - Default value if no environment variable found
+   * @returns {*} Environment value or default
+   */
+  getEnvironmentValueOrDefault(keys, defaultValue) {
+    for (const key of keys) {
+      const value = process.env[key];
+      if (value !== undefined) {
+        return parseInt(value);
+      }
+    }
+    return defaultValue;
   }
 }
 

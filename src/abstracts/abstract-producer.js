@@ -103,6 +103,24 @@ class AbstractProducer {
     this._isConnected = false;
   }
 
+  /**
+   * Returns the broker type identifier
+   * @returns {string} Broker type ('kafka', 'rabbitmq', 'bullmq')
+   * @throws {Error} When method is not implemented by subclass
+   */
+  getBrokerType() {
+    throw new Error("getBrokerType method must be implemented by subclass");
+  }
+
+  /**
+   * Logs the configuration loaded for the producer
+   */
+  _logConfigurationLoaded() {
+    logger.logDebug(
+      `${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
+    );
+  }
+
   #setupGracefulShutdown() {
     process.on("SIGINT", this.#handleGracefulShutdownProducer.bind(this, "SIGINT"));
     process.on("SIGTERM", this.#handleGracefulShutdownProducer.bind(this, "SIGTERM"));
@@ -146,24 +164,6 @@ class AbstractProducer {
   }
 
   /**
-   * Logs the configuration loaded for the producer
-   */
-  _logConfigurationLoaded() {
-    logger.logDebug(
-      `${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
-    );
-  }
-
-  /**
-   * Returns the broker type identifier
-   * @returns {string} Broker type ('kafka', 'rabbitmq', 'bullmq')
-   * @throws {Error} When method is not implemented by subclass
-   */
-  getBrokerType() {
-    throw new Error("getBrokerType method must be implemented by subclass");
-  }
-
-  /**
    * Creates a cache layer for message deduplication and coordination
    * Override to implement specific cache layer creation
    *
@@ -173,10 +173,6 @@ class AbstractProducer {
   _createCacheLayer(_config) {
     logger.logWarning("Producer cache layer is disabled");
     return null;
-  }
-
-  #generateLockKey(topic) {
-    return `${this.getBrokerType()?.toUpperCase()}-PRODUCER-DISTRIBUTED-LOCK-${topic?.toUpperCase()}`;
   }
 
   /**
@@ -196,6 +192,10 @@ class AbstractProducer {
     const lockKey = this.#generateLockKey(config?.topic);
     const lockTtl = config?.lockTtlMs || 600000;
     return new DistributedLockService(lockKey, lockTtl, this._cacheLayer);
+  }
+
+  #generateLockKey(topic) {
+    return `${this.getBrokerType()?.toUpperCase()}-PRODUCER-DISTRIBUTED-LOCK-${topic?.toUpperCase()}`;
   }
 
   /**
@@ -492,56 +492,6 @@ class AbstractProducer {
     return this.#buildProcessingResult(sendResult);
   }
 
-  async #getProcessingItems(criteria, limit) {
-    const excludedIds = (await this.#getExcludedIds()) ?? [];
-    const items = (await this.getNextItems(criteria, limit, excludedIds)) ?? [];
-    return items.filter(item => {
-      const itemId = this.getItemId(item);
-      return !excludedIds.includes(itemId);
-    });
-  }
-
-  async #getExcludedIds() {
-    try {
-      const hardExclusions = (await this.#getProcessingIds()) ?? [];
-      const softExclusions = this.#isSuppressionFullyEnabled() ? ((await this.#getSuppressedIds()) ?? []) : [];
-      return [...new Set([...hardExclusions, ...softExclusions])];
-    } catch (error) {
-      logger.logWarning("Failed to get excluded IDs, continuing without exclusions", error);
-      return [];
-    }
-  }
-
-  async #getProcessingIds() {
-    if (!this._cacheLayer) {
-      return [];
-    }
-
-    try {
-      return await this._cacheLayer.getProcessingIds();
-    } catch (error) {
-      logger.logWarning("Failed to get processing IDs from cache", error);
-      return [];
-    }
-  }
-
-  async #getSuppressedIds() {
-    if (!this._cacheLayer) {
-      return [];
-    }
-
-    try {
-      return await this._cacheLayer.getSuppressedIds();
-    } catch (error) {
-      logger.logWarning("Failed to get freezing IDs from cache", error);
-      return [];
-    }
-  }
-
-  #isSuppressionFullyEnabled() {
-    return this._cacheLayer && this._enabledSuppression;
-  }
-
   async #sendItemsToBroker(criteria, limit, options = {}) {
     this.#ensureConnected();
     if (this._distributedLockService) {
@@ -649,6 +599,96 @@ class AbstractProducer {
     }
   }
 
+  /**
+   * Creates broker-specific message format from items
+   * @param {Array<Object>} _items - Items to convert to messages
+   * @returns {Array<Object>} Broker-specific messages
+   */
+  _createBrokerMessages(_items) {
+    throw new Error("_createBrokerMessages method must be implemented by subclass");
+  }
+
+  /**
+   * Implementation-specific method to send messages to broker
+   * @param {Array<Object>} _messages - Messages to send
+   * @param {Object} _options - Send options
+   * @returns {Promise<Object>} Send result details
+   */
+  async _sendMessagesToBroker(_messages, _options) {
+    throw new Error("_sendMessagesToBroker method must be implemented by subclass");
+  }
+
+  async #getProcessingItems(criteria, limit) {
+    const excludedIds = (await this.#getExcludedIds()) ?? [];
+    const items = (await this.getNextItems(criteria, limit, excludedIds)) ?? [];
+    return items.filter(item => {
+      const itemId = this.getItemId(item);
+      return !excludedIds.includes(itemId);
+    });
+  }
+
+  /**
+   * Gets next batch of items to process based on criteria
+   * @param {Object} _criteria - Query criteria for items
+   * @param {number} _limit - Maximum number of items to fetch
+   * @param {Array<string>} _excludedIds - IDs to exclude from results
+   * @returns {Promise<Array<Object>>} Items to process
+   */
+  async getNextItems(_criteria, _limit, _excludedIds) {
+    throw new Error("getNextItems method must be implemented by subclass");
+  }
+
+  /**
+   * Gets the item ID from an item object
+   * Override to implement custom ID extraction
+   * @param {Object} item - Item to get ID from
+   * @returns {string} Unique item identifier
+   */
+  getItemId(item) {
+    throw new Error("getItemId method must be implemented by subclass");
+  }
+
+  async #getExcludedIds() {
+    try {
+      const hardExclusions = (await this.#getProcessingIds()) ?? [];
+      const softExclusions = this.#isSuppressionFullyEnabled() ? ((await this.#getSuppressedIds()) ?? []) : [];
+      return [...new Set([...hardExclusions, ...softExclusions])];
+    } catch (error) {
+      logger.logWarning("Failed to get excluded IDs, continuing without exclusions", error);
+      return [];
+    }
+  }
+
+  async #getProcessingIds() {
+    if (!this._cacheLayer) {
+      return [];
+    }
+
+    try {
+      return await this._cacheLayer.getProcessingIds();
+    } catch (error) {
+      logger.logWarning("Failed to get processing IDs from cache", error);
+      return [];
+    }
+  }
+
+  async #getSuppressedIds() {
+    if (!this._cacheLayer) {
+      return [];
+    }
+
+    try {
+      return await this._cacheLayer.getSuppressedIds();
+    } catch (error) {
+      logger.logWarning("Failed to get freezing IDs from cache", error);
+      return [];
+    }
+  }
+
+  #isSuppressionFullyEnabled() {
+    return this._cacheLayer && this._enabledSuppression;
+  }
+
   async #markItemAsSuppressed(items) {
     const result = [];
     try {
@@ -667,25 +707,6 @@ class AbstractProducer {
       );
     }
     return result;
-  }
-
-  /**
-   * Creates broker-specific message format from items
-   * @param {Array<Object>} _items - Items to convert to messages
-   * @returns {Array<Object>} Broker-specific messages
-   */
-  _createBrokerMessages(_items) {
-    throw new Error("_createBrokerMessages method must be implemented by subclass");
-  }
-
-  /**
-   * Implementation-specific method to send messages to broker
-   * @param {Array<Object>} _messages - Messages to send
-   * @param {Object} _options - Send options
-   * @returns {Promise<Object>} Send result details
-   */
-  async _sendMessagesToBroker(_messages, _options) {
-    throw new Error("_sendMessagesToBroker method must be implemented by subclass");
   }
 
   #buildProcessingResult(sendResult) {
@@ -720,27 +741,6 @@ class AbstractProducer {
     }
 
     logger.logInfo(`Produced ${sent} ${this.getMessageType()} messages (${skipped} skipped) to ${this._topic} topic`);
-  }
-
-  /**
-   * Gets next batch of items to process based on criteria
-   * @param {Object} _criteria - Query criteria for items
-   * @param {number} _limit - Maximum number of items to fetch
-   * @param {Array<string>} _excludedIds - IDs to exclude from results
-   * @returns {Promise<Array<Object>>} Items to process
-   */
-  async getNextItems(_criteria, _limit, _excludedIds) {
-    throw new Error("getNextItems method must be implemented by subclass");
-  }
-
-  /**
-   * Gets the item ID from an item object
-   * Override to implement custom ID extraction
-   * @param {Object} item - Item to get ID from
-   * @returns {string} Unique item identifier
-   */
-  getItemId(item) {
-    throw new Error("getItemId method must be implemented by subclass");
   }
 
   /**

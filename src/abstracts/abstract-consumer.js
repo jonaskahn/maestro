@@ -74,14 +74,16 @@ class AbstractConsumer {
     this._logConfigurationLoaded();
   }
 
-  #getEnvironmentValue(keys) {
-    for (const key of keys) {
-      const value = process.env[key];
-      if (value !== undefined) {
-        return value;
-      }
+  #preventDirectInstantiation() {
+    if (this.constructor === AbstractConsumer) {
+      throw new Error("AbstractConsumer cannot be instantiated directly");
     }
-    return null;
+  }
+
+  #validateConfiguration(config) {
+    this.#validateConfigurationStructure(config);
+    this.#validateTopicConfiguration(config);
+    this.#validateCacheOptions(config);
   }
 
   #validateConfigurationStructure(config) {
@@ -108,10 +110,11 @@ class AbstractConsumer {
     }
   }
 
-  #validateConfiguration(config) {
-    this.#validateConfigurationStructure(config);
-    this.#validateTopicConfiguration(config);
-    this.#validateCacheOptions(config);
+  #initializeConfiguration(config) {
+    this.#setBasicConfiguration(config);
+    this.#setConcurrencyConfiguration(config);
+    this.#initializeMetrics();
+    this.#setStatusReporting(config);
   }
 
   #setBasicConfiguration(config) {
@@ -126,12 +129,26 @@ class AbstractConsumer {
       DEFAULT_VALUES.MAX_CONCURRENCY;
   }
 
+  #getEnvironmentValue(keys) {
+    for (const key of keys) {
+      const value = process.env[key];
+      if (value !== undefined) {
+        return value;
+      }
+    }
+    return null;
+  }
+
   #initializeMetrics() {
     this.metrics = {
       [METRICS_PROPERTIES.TOTAL_PROCESSED]: 0,
       [METRICS_PROPERTIES.TOTAL_FAILED]: 0,
       [METRICS_PROPERTIES.START_TIME]: Date.now(),
     };
+  }
+
+  #setStatusReporting(config) {
+    this._statusReportInterval = this.#resolveStatusReportInterval(config);
   }
 
   #resolveStatusReportInterval(config) {
@@ -142,15 +159,9 @@ class AbstractConsumer {
     );
   }
 
-  #setStatusReporting(config) {
-    this._statusReportInterval = this.#resolveStatusReportInterval(config);
-  }
-
-  #initializeConfiguration(config) {
-    this.#setBasicConfiguration(config);
-    this.#setConcurrencyConfiguration(config);
-    this.#initializeMetrics();
-    this.#setStatusReporting(config);
+  #initializeDependencies(config) {
+    this._cacheLayer = this._createCacheLayer(config?.cacheOptions);
+    this._isShuttingDown = false;
   }
 
   /**
@@ -165,11 +176,6 @@ class AbstractConsumer {
     return null;
   }
 
-  #initializeDependencies(config) {
-    this._cacheLayer = this._createCacheLayer(config?.cacheOptions);
-    this._isShuttingDown = false;
-  }
-
   #initializeState() {
     this._isConnected = CONSUMER_STATES.DISCONNECTED;
     this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
@@ -177,91 +183,11 @@ class AbstractConsumer {
     this._isShuttingDown = false;
   }
 
-  /**
-   * Removes shutdown event listeners
-   */
-  _removeShutdownListeners() {
-    process.removeListener("SIGINT", this.#handleGracefulShutdownConsumer);
-    process.removeListener("SIGTERM", this.#handleGracefulShutdownConsumer);
-    process.removeListener("uncaughtException", this.#handleGracefulShutdownConsumer);
-    process.removeListener("unhandledRejection", this.#handleGracefulShutdownConsumer);
-  }
-
-  #markAsNotConsuming() {
-    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
-  }
-
-  /**
-   * Implementation-specific method to stop consuming from broker
-   * @returns {Promise<void>}
-   */
-  async _stopConsumingFromBroker() {
-    throw new Error("_stopConsumingFromBroker method must be implemented by subclass");
-  }
-
-  #isCurrentlyConsuming() {
-    return this._isConsuming === CONSUMER_STATES.CONSUMING;
-  }
-
-  /**
-   * Stops consuming messages from the broker
-   * @returns {Promise<void>}
-   */
-  async stopConsuming() {
-    if (!this.#isCurrentlyConsuming()) {
-      logger.logWarning(`${this.getBrokerType()} consumer is not currently consuming`);
-      return;
-    }
-
-    try {
-      await this._stopConsumingFromBroker();
-      this.#markAsNotConsuming();
-      logger.logInfo(`${this.getBrokerType()} consumer stopped consuming from ${this._topic}`);
-
-      if (this._statusReportTimer) {
-        clearInterval(this._statusReportTimer);
-        this._statusReportTimer = null;
-      }
-    } catch (error) {
-      logger.logError(`Error stopping consumption from ${this._topic}`, error);
-    }
-  }
-
-  async #stopConsumingIfActive() {
-    if (this._isConsuming === CONSUMER_STATES.CONSUMING) {
-      await this.stopConsuming();
-    }
-  }
-
-  /**
-   * Implementation-specific method to disconnect from message broker
-   * @returns {Promise<void>}
-   */
-  async _disconnectFromMessageBroker() {
-    throw new Error("_disconnectFromMessageBroker method must be implemented by subclass");
-  }
-
-  async #disconnectFromCache() {
-    if (!this._cacheLayer) {
-      return;
-    }
-
-    try {
-      await this._cacheLayer.disconnect();
-      logger.logInfo(`${this.getBrokerType()} consumer disconnected from cache layer`);
-    } catch (error) {
-      logger.logWarning("Error disconnecting from cache layer", error);
-    }
-  }
-
-  async #performDisconnection() {
-    await this.#stopConsumingIfActive();
-    await this._disconnectFromMessageBroker();
-    await this.#disconnectFromCache();
-  }
-
-  #isCurrentlyConnected() {
-    return this._isConnected === CONSUMER_STATES.CONNECTED;
+  #setupGracefulShutdown() {
+    process.on("SIGINT", this.#handleGracefulShutdownConsumer.bind(this, "SIGINT"));
+    process.on("SIGTERM", this.#handleGracefulShutdownConsumer.bind(this, "SIGTERM"));
+    process.on("uncaughtException", this.#handleGracefulShutdownConsumer.bind(this, "uncaughtException"));
+    process.on("unhandledRejection", this.#handleGracefulShutdownConsumer.bind(this, "unhandledRejection"));
   }
 
   async #handleGracefulShutdownConsumer(signal = "unknown") {
@@ -299,17 +225,43 @@ class AbstractConsumer {
     }
   }
 
-  #setupGracefulShutdown() {
-    process.on("SIGINT", this.#handleGracefulShutdownConsumer.bind(this, "SIGINT"));
-    process.on("SIGTERM", this.#handleGracefulShutdownConsumer.bind(this, "SIGTERM"));
-    process.on("uncaughtException", this.#handleGracefulShutdownConsumer.bind(this, "uncaughtException"));
-    process.on("unhandledRejection", this.#handleGracefulShutdownConsumer.bind(this, "unhandledRejection"));
+  /**
+   * Removes shutdown event listeners
+   */
+  _removeShutdownListeners() {
+    process.removeListener("SIGINT", this.#handleGracefulShutdownConsumer);
+    process.removeListener("SIGTERM", this.#handleGracefulShutdownConsumer);
+    process.removeListener("uncaughtException", this.#handleGracefulShutdownConsumer);
+    process.removeListener("unhandledRejection", this.#handleGracefulShutdownConsumer);
   }
 
-  #preventDirectInstantiation() {
-    if (this.constructor === AbstractConsumer) {
-      throw new Error("AbstractConsumer cannot be instantiated directly");
+  #isCurrentlyConsuming() {
+    return this._isConsuming === CONSUMER_STATES.CONSUMING;
+  }
+
+  #isCurrentlyConnected() {
+    return this._isConnected === CONSUMER_STATES.CONNECTED;
+  }
+
+  async #performDisconnection() {
+    await this.#stopConsumingIfActive();
+    await this._disconnectFromMessageBroker();
+    await this.#disconnectFromCache();
+  }
+
+  async #stopConsumingIfActive() {
+    if (this._isConsuming === CONSUMER_STATES.CONSUMING) {
+      await this.stopConsuming();
     }
+  }
+
+  /**
+   * Logs the configuration loaded for the consumer
+   */
+  _logConfigurationLoaded() {
+    logger.logDebug(
+      `${this.getBrokerType()?.toUpperCase()} Consumer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
+    );
   }
 
   /**
@@ -322,16 +274,33 @@ class AbstractConsumer {
   }
 
   /**
-   * Logs the configuration loaded for the consumer
+   * Establishes connection to message broker and cache layer
+   * @returns {Promise<void>}
+   * @throws {Error} When connection fails
    */
-  _logConfigurationLoaded() {
-    logger.logDebug(
-      `${this.getBrokerType()?.toUpperCase()} Consumer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
-    );
+  async connect() {
+    if (this.#isAlreadyConnected()) {
+      logger.logInfo(`${this.getBrokerType()} consumer is already connected`);
+      return;
+    }
+    try {
+      await this.#establishConnection();
+      await this._createTopicIfAllowed();
+      this.#markAsConnected();
+      logger.logInfo(`${this.getBrokerType()?.toUpperCase()} consumer is connected to topic [ ${this._topic} ]`);
+    } catch (error) {
+      this.#handleConnectionError(error);
+      throw error;
+    }
   }
 
   #isAlreadyConnected() {
     return this._isConnected === CONSUMER_STATES.CONNECTED;
+  }
+
+  async #establishConnection() {
+    await this.#connectToCache();
+    await this._connectToMessageBroker();
   }
 
   async #connectToCache() {
@@ -357,41 +326,6 @@ class AbstractConsumer {
     throw new Error("_connectToMessageBroker method must be implemented by subclass");
   }
 
-  async #establishConnection() {
-    await this.#connectToCache();
-    await this._connectToMessageBroker();
-  }
-
-  #markAsConnected() {
-    this._isConnected = CONSUMER_STATES.CONNECTED;
-  }
-
-  #handleConnectionError(error) {
-    this._isConnected = CONSUMER_STATES.DISCONNECTED;
-    logger.logError(`Failed to connect ${this.getBrokerType()} consumer`, error);
-  }
-
-  /**
-   * Establishes connection to message broker and cache layer
-   * @returns {Promise<void>}
-   * @throws {Error} When connection fails
-   */
-  async connect() {
-    if (this.#isAlreadyConnected()) {
-      logger.logInfo(`${this.getBrokerType()} consumer is already connected`);
-      return;
-    }
-    try {
-      await this.#establishConnection();
-      await this._createTopicIfAllowed();
-      this.#markAsConnected();
-      logger.logInfo(`${this.getBrokerType()?.toUpperCase()} consumer is connected to topic [ ${this._topic} ]`);
-    } catch (error) {
-      this.#handleConnectionError(error);
-      throw error;
-    }
-  }
-
   /**
    * Creates topic if allowed by broker and configuration
    * Override to implement topic creation logic
@@ -403,14 +337,13 @@ class AbstractConsumer {
     );
   }
 
-  #markAsDisconnected() {
-    this._isConnected = CONSUMER_STATES.DISCONNECTED;
+  #markAsConnected() {
+    this._isConnected = CONSUMER_STATES.CONNECTED;
   }
 
-  #handleDisconnectionError(error) {
-    logger.logError(`Error disconnecting ${this.getBrokerType()} consumer`, error);
-    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+  #handleConnectionError(error) {
     this._isConnected = CONSUMER_STATES.DISCONNECTED;
+    logger.logError(`Failed to connect ${this.getBrokerType()} consumer`, error);
   }
 
   /**
@@ -434,46 +367,35 @@ class AbstractConsumer {
     }
   }
 
-  #ensureConnected() {
-    if (this._isShuttingDown) {
-      throw new Error(`${this.getBrokerType()} consumer is shutting down`);
-    }
+  #markAsDisconnected() {
+    this._isConnected = CONSUMER_STATES.DISCONNECTED;
+  }
 
-    if (!this.#isCurrentlyConnected()) {
-      throw new Error(`${this.getBrokerType()} consumer is not connected`);
-    }
+  #handleDisconnectionError(error) {
+    logger.logError(`Error disconnecting ${this.getBrokerType()} consumer`, error);
+    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+    this._isConnected = CONSUMER_STATES.DISCONNECTED;
   }
 
   /**
-   * Implementation-specific method to start consuming from broker
-   * @param {Object} _handler - Message handler function
-   * @param {Object} _options - Consumption options
+   * Implementation-specific method to disconnect from message broker
    * @returns {Promise<void>}
    */
-  async _startConsumingFromBroker(_handler, _options) {
-    throw new Error("_startConsumingFromBroker method must be implemented by subclass");
+  async _disconnectFromMessageBroker() {
+    throw new Error("_disconnectFromMessageBroker method must be implemented by subclass");
   }
 
-  /**
-   * Handles errors during consumption start
-   * @param {Error} error - Error that occurred
-   */
-  _handleConsumingStartError(error) {
-    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
-    logger.logError(`Failed to start consuming from ${this._topic}`, error);
-  }
-
-  #startStatusReporting() {
-    if (this._statusReportTimer) {
-      clearInterval(this._statusReportTimer);
+  async #disconnectFromCache() {
+    if (!this._cacheLayer) {
+      return;
     }
 
-    this._statusReportTimer = setInterval(() => {
-      const status = this.getConfigStatus();
-      logger.logInfo(
-        `${this.getBrokerType()} consumer status for topic [${this._topic}]: processed=${status.processedCount}, failed=${status.failedCount}, active=0`
-      );
-    }, this._statusReportInterval);
+    try {
+      await this._cacheLayer.disconnect();
+      logger.logInfo(`${this.getBrokerType()} consumer disconnected from cache layer`);
+    } catch (error) {
+      logger.logWarning("Error disconnecting from cache layer", error);
+    }
   }
 
   /**
@@ -504,6 +426,94 @@ class AbstractConsumer {
     }
   }
 
+  #ensureConnected() {
+    if (this._isShuttingDown) {
+      throw new Error(`${this.getBrokerType()} consumer is shutting down`);
+    }
+
+    if (!this.#isCurrentlyConnected()) {
+      throw new Error(`${this.getBrokerType()} consumer is not connected`);
+    }
+  }
+
+  /**
+   * Implementation-specific method to start consuming from broker
+   * @param {Object} _handler - Message handler function
+   * @param {Object} _options - Consumption options
+   * @returns {Promise<void>}
+   */
+  async _startConsumingFromBroker(_handler, _options) {
+    throw new Error("_startConsumingFromBroker method must be implemented by subclass");
+  }
+
+  #startStatusReporting() {
+    if (this._statusReportTimer) {
+      clearInterval(this._statusReportTimer);
+    }
+
+    this._statusReportTimer = setInterval(() => {
+      const status = this.getConfigStatus();
+      logger.logInfo(
+        `${this.getBrokerType()} consumer status for topic [${this._topic}]: processed=${status.processedCount}, failed=${status.failedCount}, active=0`
+      );
+    }, this._statusReportInterval);
+  }
+
+  /**
+   * Handles errors during consumption start
+   * @param {Error} error - Error that occurred
+   */
+  _handleConsumingStartError(error) {
+    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+    logger.logError(`Failed to start consuming from ${this._topic}`, error);
+  }
+
+  /**
+   * Stops consuming messages from the broker
+   * @returns {Promise<void>}
+   */
+  async stopConsuming() {
+    if (!this.#isCurrentlyConsuming()) {
+      logger.logWarning(`${this.getBrokerType()} consumer is not currently consuming`);
+      return;
+    }
+
+    try {
+      await this._stopConsumingFromBroker();
+      this.#markAsNotConsuming();
+      logger.logInfo(`${this.getBrokerType()} consumer stopped consuming from ${this._topic}`);
+
+      if (this._statusReportTimer) {
+        clearInterval(this._statusReportTimer);
+        this._statusReportTimer = null;
+      }
+    } catch (error) {
+      logger.logError(`Error stopping consumption from ${this._topic}`, error);
+    }
+  }
+
+  /**
+   * Implementation-specific method to stop consuming from broker
+   * @returns {Promise<void>}
+   */
+  async _stopConsumingFromBroker() {
+    throw new Error("_stopConsumingFromBroker method must be implemented by subclass");
+  }
+
+  #markAsNotConsuming() {
+    this._isConsuming = CONSUMER_STATES.NOT_CONSUMING;
+  }
+
+  /**
+   * Processes a message with business logic
+   * Must be implemented by user to define business processing logic
+   * @param {Object} _item - Message data to process
+   * @returns {Promise<void>}
+   */
+  async process(_item) {
+    throw new Error("process method must be implemented by user");
+  }
+
   /**
    * Extracts item ID from message data
    * Override to implement custom ID extraction
@@ -521,103 +531,6 @@ class AbstractConsumer {
    */
   getMessageKey(item) {
     return this.getItemId(item);
-  }
-
-  async #isMessageAlreadyCompleted(itemId) {
-    try {
-      return await this._isItemProcessed(itemId);
-    } catch (error) {
-      logger.logWarning(`Failed to check if message ${itemId} is already completed`, error);
-      return false;
-    }
-  }
-
-  /**
-   * Checks if an item is already completed in the cache
-   * Override to implement specific completion check
-   * @param {string} _itemId - Item identifier
-   * @returns {Promise<boolean>} True if item is completed
-   */
-  async _isItemProcessed(_itemId) {
-    throw new Error("_isItemProcessed must be implemented by subclass");
-  }
-
-  async #markAsProcessingStart(itemId) {
-    try {
-      if (!this._cacheLayer) {
-        return false;
-      }
-      return await this._cacheLayer?.markAsProcessing(itemId);
-    } catch (error) {
-      logger.logWarning(`Failed to mark item ${itemId} as processing start`, error);
-      return false;
-    }
-  }
-
-  async #markAsProcessingEnd(itemId) {
-    if (!this._cacheLayer) {
-      return;
-    }
-    try {
-      return await this._cacheLayer?.markAsCompletedProcessing(itemId);
-    } catch (error) {
-      logger.logWarning(`Failed to mark item ${itemId} as processing completed`, error);
-      return false;
-    }
-  }
-
-  /**
-   * Processes a message with business logic
-   * Must be implemented by user to define business processing logic
-   * @param {Object} _item - Message data to process
-   * @returns {Promise<void>}
-   */
-  async process(_item) {
-    throw new Error("process method must be implemented by user");
-  }
-
-  async #afterProcessSuccess(itemId, messageKey, startTime) {
-    await this._onItemProcessSuccess(itemId);
-    this.metrics[METRICS_PROPERTIES.TOTAL_PROCESSED]++;
-    const duration = Date.now() - startTime;
-    logger.logInfo(
-      `Successfully processed message in topic [${this._topic}] for ${itemId} (key: ${messageKey}, duration: ${duration}ms)`
-    );
-  }
-
-  /**
-   * Called when item processing is successful
-   * Override to implement custom success handling
-   * @param {string} _itemId - Item identifier
-   * @returns {Promise<void>}
-   */
-  async _onItemProcessSuccess(_itemId) {
-    throw new Error("_markItemAsCompleted method must be implemented by subclass");
-  }
-
-  async #handleProcessingFailure(itemId, messageKey, error) {
-    try {
-      await this._onItemProcessFailed(itemId, error);
-      this.metrics[METRICS_PROPERTIES.TOTAL_FAILED]++;
-      logger.logWarning(
-        `Failed to consume message on topic [${this._topic}] : ${itemId} (Message Key: ${messageKey}), but error will be ignored to throw. Due ${error ? `${error?.message}` : null}`
-      );
-    } catch (error) {
-      logger.logWarning(
-        `Failed to process failed message: ${itemId} (Key: ${messageKey}), but error will be ignored to throw [${error?.message}]`
-      );
-    }
-  }
-
-  /**
-   * Called when item processing fails
-   * Override to implement custom failure handling
-   * @param {string} _itemId - Item identifier
-   * @param {Error} _error - Error that occurred
-   * @returns {Promise<void>}
-   */
-  async _onItemProcessFailed(_itemId, _error) {
-    throw new Error("_onItemProcessFailed method must be implemented by subclass");
   }
 
   /**
@@ -685,8 +598,91 @@ class AbstractConsumer {
     }
   }
 
-  #isCacheConnected() {
-    return this._cacheLayer ? this._cacheLayer.isConnected : false;
+  async #isMessageAlreadyCompleted(itemId) {
+    try {
+      return await this._isItemProcessed(itemId);
+    } catch (error) {
+      logger.logWarning(`Failed to check if message ${itemId} is already completed`, error);
+      return false;
+    }
+  }
+
+  /**
+   * Checks if an item is already completed in the cache
+   * Override to implement specific completion check
+   * @param {string} _itemId - Item identifier
+   * @returns {Promise<boolean>} True if item is completed
+   */
+  async _isItemProcessed(_itemId) {
+    throw new Error("_isItemProcessed must be implemented by subclass");
+  }
+
+  async #markAsProcessingStart(itemId) {
+    try {
+      if (!this._cacheLayer) {
+        return false;
+      }
+      return await this._cacheLayer?.markAsProcessing(itemId);
+    } catch (error) {
+      logger.logWarning(`Failed to mark item ${itemId} as processing start`, error);
+      return false;
+    }
+  }
+
+  async #afterProcessSuccess(itemId, messageKey, startTime) {
+    await this._onItemProcessSuccess(itemId);
+    this.metrics[METRICS_PROPERTIES.TOTAL_PROCESSED]++;
+    const duration = Date.now() - startTime;
+    logger.logInfo(
+      `Successfully processed message in topic [${this._topic}] for ${itemId} (key: ${messageKey}, duration: ${duration}ms)`
+    );
+  }
+
+  /**
+   * Called when item processing is successful
+   * Override to implement custom success handling
+   * @param {string} _itemId - Item identifier
+   * @returns {Promise<void>}
+   */
+  async _onItemProcessSuccess(_itemId) {
+    throw new Error("_markItemAsCompleted method must be implemented by subclass");
+  }
+
+  async #handleProcessingFailure(itemId, messageKey, error) {
+    try {
+      await this._onItemProcessFailed(itemId, error);
+      this.metrics[METRICS_PROPERTIES.TOTAL_FAILED]++;
+      logger.logWarning(
+        `Failed to consume message on topic [${this._topic}] : ${itemId} (Message Key: ${messageKey}), but error will be ignored to throw. Due ${error ? `${error?.message}` : null}`
+      );
+    } catch (error) {
+      logger.logWarning(
+        `Failed to process failed message: ${itemId} (Key: ${messageKey}), but error will be ignored to throw [${error?.message}]`
+      );
+    }
+  }
+
+  /**
+   * Called when item processing fails
+   * Override to implement custom failure handling
+   * @param {string} _itemId - Item identifier
+   * @param {Error} _error - Error that occurred
+   * @returns {Promise<void>}
+   */
+  async _onItemProcessFailed(_itemId, _error) {
+    throw new Error("_onItemProcessFailed method must be implemented by subclass");
+  }
+
+  async #markAsProcessingEnd(itemId) {
+    if (!this._cacheLayer) {
+      return;
+    }
+    try {
+      return await this._cacheLayer?.markAsCompletedProcessing(itemId);
+    } catch (error) {
+      logger.logWarning(`Failed to mark item ${itemId} as processing completed`, error);
+      return false;
+    }
   }
 
   /**
@@ -706,6 +702,10 @@ class AbstractConsumer {
       failedCount: this.metrics[METRICS_PROPERTIES.TOTAL_FAILED],
       uptime: Math.floor(uptime / 1000),
     };
+  }
+
+  #isCacheConnected() {
+    return this._cacheLayer ? this._cacheLayer.isConnected : false;
   }
 }
 

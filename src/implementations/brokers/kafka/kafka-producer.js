@@ -80,6 +80,45 @@ class KafkaProducer extends AbstractProducer {
   }
 
   /**
+   * Gets the message type identifier (topic name)
+   * @returns {string} Message type identifier
+   */
+  getMessageType() {
+    return this._topic;
+  }
+
+  /**
+   * Gets the message broker type identifier
+   * @returns {string} Broker type ('kafka')
+   */
+  getBrokerType() {
+    return "kafka";
+  }
+
+  /**
+   * Gets the item ID from an item object
+   * @param {Object} item - Item to get ID from
+   * @returns {string} Unique item identifier
+   */
+  getItemId(item) {
+    return item._id;
+  }
+
+  /**
+   * Gets configuration status information including Kafka-specific details
+   * @returns {Object} Extended configuration status
+   */
+  _getStatusConfig() {
+    return {
+      ...super._getStatusConfig(),
+      kafkaProducerConnected: this._producer !== null,
+      backpressureMonitorEnabled: this.getBackpressureMonitor() !== null,
+      isIdempotent: this._producerOptions.idempotent,
+      groupId: this._groupId,
+    };
+  }
+
+  /**
    * Creates a cache layer for message deduplication
    * @param {Object} config - Cache configuration
    * @returns {Object|null} Cache client or null if disabled
@@ -115,35 +154,17 @@ class KafkaProducer extends AbstractProducer {
   }
 
   /**
-   * Disconnects from Kafka broker and admin client
-   * @returns {Promise<void>}
+   * Creates topic if it doesn't exist and auto-creation is enabled
+   * @returns {Promise<boolean>} True if topic exists or was created
    */
-  async _disconnectFromMessageBroker() {
-    if (this._producer) {
-      await this._producer.disconnect();
-      this._producer = null;
+  async _createTopicIfAllowed() {
+    if (await KafkaManager.isTopicExisted(this._admin, this._topic)) {
+      return true;
     }
-    if (this._admin) {
-      await this._admin.disconnect();
-      this._admin = null;
+    if (this._topicOptions.allowAutoTopicCreation) {
+      return await KafkaManager.createTopic(this._admin, this._topic, this._topicOptions);
     }
-    logger.logConnectionEvent("KafkaProducer", "disconnected from Kafka broker");
-  }
-
-  /**
-   * Gets the message type identifier (topic name)
-   * @returns {string} Message type identifier
-   */
-  getMessageType() {
-    return this._topic;
-  }
-
-  /**
-   * Gets the message broker type identifier
-   * @returns {string} Broker type ('kafka')
-   */
-  getBrokerType() {
-    return "kafka";
+    return false;
   }
 
   /**
@@ -193,40 +214,19 @@ class KafkaProducer extends AbstractProducer {
   }
 
   /**
-   * Creates topic if it doesn't exist and auto-creation is enabled
-   * @returns {Promise<boolean>} True if topic exists or was created
+   * Disconnects from Kafka broker and admin client
+   * @returns {Promise<void>}
    */
-  async _createTopicIfAllowed() {
-    if (await KafkaManager.isTopicExisted(this._admin, this._topic)) {
-      return true;
+  async _disconnectFromMessageBroker() {
+    if (this._producer) {
+      await this._producer.disconnect();
+      this._producer = null;
     }
-    if (this._topicOptions.allowAutoTopicCreation) {
-      return await KafkaManager.createTopic(this._admin, this._topic, this._topicOptions);
+    if (this._admin) {
+      await this._admin.disconnect();
+      this._admin = null;
     }
-    return false;
-  }
-
-  /**
-   * Gets the item ID from an item object
-   * @param {Object} item - Item to get ID from
-   * @returns {string} Unique item identifier
-   */
-  getItemId(item) {
-    return item._id;
-  }
-
-  /**
-   * Gets configuration status information including Kafka-specific details
-   * @returns {Object} Extended configuration status
-   */
-  _getStatusConfig() {
-    return {
-      ...super._getStatusConfig(),
-      kafkaProducerConnected: this._producer !== null,
-      backpressureMonitorEnabled: this.getBackpressureMonitor() !== null,
-      isIdempotent: this._producerOptions.idempotent,
-      groupId: this._groupId,
-    };
+    logger.logConnectionEvent("KafkaProducer", "disconnected from Kafka broker");
   }
 }
 

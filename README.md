@@ -6,7 +6,7 @@
 [![Lint](https://github.com/jonaskahn/maestro/actions/workflows/lint.yml/badge.svg)](https://github.com/jonaskahn/maestro/actions/workflows/lint.yml)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/jonaskahn/maestro/pulls)
 
-> Job orchestration made simple for Node.js message workflows
+> Message Queue made simple for Node.js message workflows
 
 ## Introduction
 

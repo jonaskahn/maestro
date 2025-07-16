@@ -67,51 +67,57 @@ class DistributedLockService {
   }
 
   /**
-   * Ensures cache is initialized and connected
-   * @returns {Promise<void>}
+   * Attempts to acquire the distributed lock with retry logic
+   *
+   * Uses exponential backoff with jitter for retries to reduce contention.
+   * Automatically starts background refresh to maintain the lock if acquired.
+   *
+   * @param {number} lockTtl - Expect time to lock
+   * @param {number} maxWaitTime - Maximum time to wait for lock acquisition in milliseconds
+   * @returns {Promise<boolean>} True if lock was successfully acquired
+   * @throws {Error} When lock acquisition fails due to cache errors
    */
+  async acquire(lockTtl, maxWaitTime) {
+    await this.#ensureCacheInitialized();
+    const acquisitionResult = await this.#attemptLockAcquisition(lockTtl, maxWaitTime);
+    if (acquisitionResult.success) {
+      this.isLocked = LOCK_STATES.LOCKED;
+      this.#startAutoRefresh();
+      logger.logDebug(`Lock acquired successfully: ${this.lockKey}`);
+      return true;
+    }
+    logger.logWarning(`Failed to acquire lock: ${this.lockKey} (timeout)`);
+    return false;
+  }
+
   async #ensureCacheInitialized() {
     if (!this.cacheLayer) {
       logger.logWarning("No cache instance provided, distributed locking disabled");
       return;
     }
-
     if (!this.cacheLayer.isConnected && this.cacheLayer.connect) {
       await this.cacheLayer.connect();
       logger.logInfo(`Distributed lock initialized with cache: ${this.lockKey}`);
     }
   }
 
-  /**
-   * Attempts to acquire lock with exponential backoff retry
-   *
-   * @param {number} lockTtl - Expect time to lock
-   * @param {number} maxWaitTime - Maximum milliseconds to wait for lock
-   * @returns {Promise<Object>} Result object with success status
-   */
   async #attemptLockAcquisition(lockTtl, maxWaitTime) {
     const realLockTime = lockTtl ?? this.ttl;
     const realMaxWaitTime = maxWaitTime ?? realLockTime * 3;
     const startTime = Date.now();
     let attemptCount = 0;
-
     while (Date.now() - startTime < realMaxWaitTime) {
       attemptCount++;
-
       try {
         if (!this.cacheLayer) {
           throw new Error("No cache layer available for lock operations");
         }
-
         const result = await this.cacheLayer.setIfNotExists(this.lockKey, this.lockValue, realLockTime);
-
         if (result) {
           logger.logDebug(`Lock acquired: ${this.lockKey} (attempt ${attemptCount})`);
           return { success: true };
         }
-
         logger.logDebug(`Lock acquisition attempt ${attemptCount} failed, retrying...`);
-
         const baseDelay = TtlConfig.retryDelayMs;
         const maxDelay = Math.min(
           baseDelay * Math.pow(DEFAULT_VALUES.BACKOFF_MULTIPLIER, attemptCount),
@@ -119,74 +125,33 @@ class DistributedLockService {
         );
         const randomFactor = 1 + (Math.random() * DEFAULT_VALUES.BACKOFF_RANDOMNESS) / 100;
         const delay = Math.floor(maxDelay * randomFactor);
-
         await new Promise(resolve => setTimeout(resolve, delay));
       } catch (error) {
         logger.logError(`Lock acquisition error for ${this.lockKey}`, error);
         return { success: false, error };
       }
     }
-
     return { success: false, reason: "timeout" };
   }
 
-  /**
-   * Attempts to release a held lock
-   * @returns {Promise<Object>} Result object with success status
-   */
-  async #attemptLockRelease() {
-    try {
-      if (!this.cacheLayer) {
-        return { success: true, reason: "no_cache" };
-      }
-
-      if (this.isLocked !== LOCK_STATES.LOCKED) {
-        return { success: true, reason: "not_locked" };
-      }
-
-      const currentValue = await this.cacheLayer.get(this.lockKey);
-
-      if (currentValue === this.lockValue) {
-        await this.cacheLayer.del(this.lockKey);
-        return { success: true };
-      } else if (!currentValue) {
-        return { success: true, reason: "already_released" };
-      } else {
-        return { success: false, reason: "not_lock_owner" };
-      }
-    } catch (error) {
-      logger.logError(`Lock release error for ${this.lockKey}`, error);
-      return { success: false, error };
-    }
-  }
-
-  /**
-   * Stops automatic lock refresh interval
-   */
-  #stopAutoRefresh() {
+  #startAutoRefresh() {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
-      this.refreshInterval = null;
     }
+    const refreshIntervalMs = Math.floor(this.ttl / 3);
+    this.refreshInterval = setInterval(() => this.#performRefresh(), refreshIntervalMs);
   }
 
-  /**
-   * Performs lock refresh by extending TTL
-   * @returns {Promise<void>}
-   */
   async #performRefresh() {
     try {
       if (this.isLocked !== LOCK_STATES.LOCKED) {
         this.#stopAutoRefresh();
         return;
       }
-
       if (!this.cacheLayer) {
         return;
       }
-
       const currentValue = await this.cacheLayer.get(this.lockKey);
-
       if (currentValue === this.lockValue) {
         await this.cacheLayer.expire(this.lockKey, this.ttl);
         logger.logDebug(`Lock refreshed: ${this.lockKey}`);
@@ -200,43 +165,11 @@ class DistributedLockService {
     }
   }
 
-  /**
-   * Starts automatic refresh interval
-   */
-  #startAutoRefresh() {
+  #stopAutoRefresh() {
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
+      this.refreshInterval = null;
     }
-
-    const refreshIntervalMs = Math.floor(this.ttl / 3);
-    this.refreshInterval = setInterval(() => this.#performRefresh(), refreshIntervalMs);
-  }
-
-  /**
-   * Attempts to acquire the distributed lock with retry logic
-   *
-   * Uses exponential backoff with jitter for retries to reduce contention.
-   * Automatically starts background refresh to maintain the lock if acquired.
-   *
-   * @param {number} lockTtl - Expect time to lock
-   * @param {number} maxWaitTime - Maximum time to wait for lock acquisition in milliseconds
-   * @returns {Promise<boolean>} True if lock was successfully acquired
-   * @throws {Error} When lock acquisition fails due to cache errors
-   */
-  async acquire(lockTtl, maxWaitTime) {
-    await this.#ensureCacheInitialized();
-
-    const acquisitionResult = await this.#attemptLockAcquisition(lockTtl, maxWaitTime);
-
-    if (acquisitionResult.success) {
-      this.isLocked = LOCK_STATES.LOCKED;
-      this.#startAutoRefresh();
-      logger.logDebug(`Lock acquired successfully: ${this.lockKey}`);
-      return true;
-    }
-
-    logger.logWarning(`Failed to acquire lock: ${this.lockKey} (timeout)`);
-    return false;
   }
 
   /**
@@ -252,26 +185,45 @@ class DistributedLockService {
     if (this.isLocked !== LOCK_STATES.LOCKED) {
       return true;
     }
-
     try {
       await this.#ensureCacheInitialized();
       const releaseResult = await this.#attemptLockRelease();
-
       this.#stopAutoRefresh();
       this.isLocked = LOCK_STATES.UNLOCKED;
-
       if (releaseResult.success) {
         logger.logDebug(`Lock released: ${this.lockKey}`);
       } else {
         logger.logWarning(`Failed to release lock: ${this.lockKey} (not lock owner)`);
       }
-
       return releaseResult.success;
     } catch (error) {
       logger.logError(`Lock release error for ${this.lockKey}`, error);
       this.#stopAutoRefresh();
       this.isLocked = LOCK_STATES.UNLOCKED;
       return false;
+    }
+  }
+
+  async #attemptLockRelease() {
+    try {
+      if (!this.cacheLayer) {
+        return { success: true, reason: "no_cache" };
+      }
+      if (this.isLocked !== LOCK_STATES.LOCKED) {
+        return { success: true, reason: "not_locked" };
+      }
+      const currentValue = await this.cacheLayer.get(this.lockKey);
+      if (currentValue === this.lockValue) {
+        await this.cacheLayer.del(this.lockKey);
+        return { success: true };
+      } else if (!currentValue) {
+        return { success: true, reason: "already_released" };
+      } else {
+        return { success: false, reason: "not_lock_owner" };
+      }
+    } catch (error) {
+      logger.logError(`Lock release error for ${this.lockKey}`, error);
+      return { success: false, error };
     }
   }
 
@@ -287,14 +239,11 @@ class DistributedLockService {
     await this.release().catch(error => {
       logger.logWarning(`Error releasing lock during disconnect: ${this.lockKey}`, error);
     });
-
     this.#stopAutoRefresh();
     this.isLocked = LOCK_STATES.UNLOCKED;
-
     if (this.cacheLayer && typeof this.cacheLayer.disconnect === "function") {
       await this.cacheLayer.disconnect();
     }
-
     logger.logInfo(`Distributed lock disconnected: ${this.lockKey}`);
   }
 

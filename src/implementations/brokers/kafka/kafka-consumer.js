@@ -79,24 +79,38 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   /**
-   * Creates a cache layer for message deduplication
-   * @param {Object} cacheOptions - Cache configuration options
-   * @returns {Object|null} Cache client instance or null if disabled
-   */
-  _createCacheLayer(cacheOptions) {
-    if (!cacheOptions) {
-      logger.logWarning("Cache layer is disabled, _config is not yet defined");
-      return null;
-    }
-    return CacheClientFactory.createClient(cacheOptions);
-  }
-
-  /**
    * Gets the broker type identifier
    * @returns {string} Broker type ('kafka')
    */
   getBrokerType() {
     return "kafka";
+  }
+
+  /**
+   * Gets consumer status information including Kafka-specific metrics
+   * @returns {Object} Status object with connection and configuration details
+   */
+  getConfigStatus() {
+    return {
+      ...super.getConfigStatus(),
+      groupId: this._groupId,
+      sessionTimeout: this._consumerOptions.sessionTimeout,
+      heartbeatInterval: this._consumerOptions.heartbeatInterval,
+      maxBytesPerPartition: this._consumerOptions.maxBytesPerPartition,
+      autoCommit: this._consumerOptions.autoCommit,
+      fromBeginning: this._consumerOptions.fromBeginning,
+      partitionsConsumedConcurrently: this.maxConcurrency,
+    };
+  }
+
+  /**
+   * Connects to Kafka broker and admin client
+   * @returns {Promise<void>}
+   */
+  async _connectToMessageBroker() {
+    await this._consumer.connect();
+    await this._admin.connect();
+    logger.logConnectionEvent("Kafka Consumer", "connected to Kafka broker");
   }
 
   /**
@@ -113,29 +127,16 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   /**
-   * Connects to Kafka broker and admin client
-   * @returns {Promise<void>}
+   * Creates a cache layer for message deduplication
+   * @param {Object} cacheOptions - Cache configuration options
+   * @returns {Object|null} Cache client instance or null if disabled
    */
-  async _connectToMessageBroker() {
-    await this._consumer.connect();
-    await this._admin.connect();
-    logger.logConnectionEvent("Kafka Consumer", "connected to Kafka broker");
-  }
-
-  /**
-   * Disconnects from Kafka broker and admin client
-   * @returns {Promise<void>}
-   */
-  async _disconnectFromMessageBroker() {
-    if (this._consumer) {
-      await this._consumer.disconnect();
-      this._consumer = null;
+  _createCacheLayer(cacheOptions) {
+    if (!cacheOptions) {
+      logger.logWarning("Cache layer is disabled, _config is not yet defined");
+      return null;
     }
-    if (this._admin) {
-      await this._admin.disconnect();
-      this._admin = null;
-    }
-    logger.logConnectionEvent("Kafka Consumer", "disconnected from Kafka broker");
+    return CacheClientFactory.createClient(cacheOptions);
   }
 
   /**
@@ -250,20 +251,19 @@ class KafkaConsumer extends AbstractConsumer {
   }
 
   /**
-   * Gets consumer status information including Kafka-specific metrics
-   * @returns {Object} Status object with connection and configuration details
+   * Disconnects from Kafka broker and admin client
+   * @returns {Promise<void>}
    */
-  getConfigStatus() {
-    return {
-      ...super.getConfigStatus(),
-      groupId: this._groupId,
-      sessionTimeout: this._consumerOptions.sessionTimeout,
-      heartbeatInterval: this._consumerOptions.heartbeatInterval,
-      maxBytesPerPartition: this._consumerOptions.maxBytesPerPartition,
-      autoCommit: this._consumerOptions.autoCommit,
-      fromBeginning: this._consumerOptions.fromBeginning,
-      partitionsConsumedConcurrently: this.maxConcurrency,
-    };
+  async _disconnectFromMessageBroker() {
+    if (this._consumer) {
+      await this._consumer.disconnect();
+      this._consumer = null;
+    }
+    if (this._admin) {
+      await this._admin.disconnect();
+      this._admin = null;
+    }
+    logger.logConnectionEvent("Kafka Consumer", "disconnected from Kafka broker");
   }
 }
 

@@ -172,6 +172,84 @@ class KafkaManager {
     return kafkaClient.consumer(consumerOptions);
   }
 
+  /**
+   * Get compression type enum value from string
+   * @param {string} type - Compression type name
+   * @return {CompressionTypes} KafkaJS compression type
+   */
+  static getCompressionType(type) {
+    const expectedType = type?.toLowerCase();
+    switch (expectedType) {
+      case "gzip":
+        return CompressionTypes.GZIP;
+      case "lz4":
+        return CompressionTypes.LZ4;
+      case "zstd":
+        return CompressionTypes.ZSTD;
+      default:
+        return CompressionTypes.None;
+    }
+  }
+
+  /**
+   * @param {string} type
+   * Generate unique sequence ID for messages
+   * @returns {string} Unique sequence ID
+   */
+  static generateSequenceId(type) {
+    return `${type ?? "SEQ"}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+  }
+
+  /**
+   * Parse message content safely
+   * @param {Buffer|string} messageValue - Raw message value
+   * @returns {any} Parsed content or original string
+   */
+  static parseMessageValue(messageValue) {
+    if (!messageValue) {
+      return null;
+    }
+    try {
+      const result = JSON.parse(messageValue.toString());
+      logger.logDebug("Success parse message content from Kafka Broker");
+      return result;
+    } catch (error) {
+      logger.logWarning("Failed to parse message content from Kafka Broker", error.message);
+      return messageValue.toString();
+    }
+  }
+
+  /**
+   * Create message ID from Kafka message metadata
+   * @param {string} topic - Topic name
+   * @param {number} partition - Partition number
+   * @param {string} offset - Message offset
+   * @returns {string} Formatted message ID
+   */
+  static createMessageId(topic, partition, offset) {
+    return `${topic}:${partition}:${offset}`;
+  }
+
+  /**
+   * Convert headers to Kafka-compatible format (Buffers)
+   * @param {Object} headers - Headers object
+   * @returns {Object} Headers with Buffer values
+   */
+  static convertHeadersToBuffers(headers) {
+    if (!headers || typeof headers !== "object") {
+      return {};
+    }
+
+    const bufferedHeaders = {};
+    for (const [key, value] of Object.entries(headers)) {
+      if (value !== null && value !== undefined) {
+        bufferedHeaders[key] = Buffer.isBuffer(value) ? value : Buffer.from(String(value));
+      }
+    }
+
+    return bufferedHeaders;
+  }
+
   static async createTopic(admin, topic, topicOptions) {
     try {
       const result = await admin.createTopics({
@@ -202,25 +280,6 @@ class KafkaManager {
     } catch (error) {
       logger.logWarning(`📢 Topic ${topic} not found: ${error.message}`);
       return false;
-    }
-  }
-
-  /**
-   * Get compression type enum value from string
-   * @param {string} type - Compression type name
-   * @return {CompressionTypes} KafkaJS compression type
-   */
-  static getCompressionType(type) {
-    const expectedType = type?.toLowerCase();
-    switch (expectedType) {
-      case "gzip":
-        return CompressionTypes.GZIP;
-      case "lz4":
-        return CompressionTypes.LZ4;
-      case "zstd":
-        return CompressionTypes.ZSTD;
-      default:
-        return CompressionTypes.None;
     }
   }
 
@@ -346,65 +405,6 @@ class KafkaManager {
     }
 
     return standardizeConfig;
-  }
-
-  /**
-   * Parse message content safely
-   * @param {Buffer|string} messageValue - Raw message value
-   * @returns {any} Parsed content or original string
-   */
-  static parseMessageValue(messageValue) {
-    if (!messageValue) {
-      return null;
-    }
-    try {
-      const result = JSON.parse(messageValue.toString());
-      logger.logDebug("Success parse message content from Kafka Broker");
-      return result;
-    } catch (error) {
-      logger.logWarning("Failed to parse message content from Kafka Broker", error.message);
-      return messageValue.toString();
-    }
-  }
-
-  /**
-   * Create message ID from Kafka message metadata
-   * @param {string} topic - Topic name
-   * @param {number} partition - Partition number
-   * @param {string} offset - Message offset
-   * @returns {string} Formatted message ID
-   */
-  static createMessageId(topic, partition, offset) {
-    return `${topic}:${partition}:${offset}`;
-  }
-
-  /**
-   * Convert headers to Kafka-compatible format (Buffers)
-   * @param {Object} headers - Headers object
-   * @returns {Object} Headers with Buffer values
-   */
-  static convertHeadersToBuffers(headers) {
-    if (!headers || typeof headers !== "object") {
-      return {};
-    }
-
-    const bufferedHeaders = {};
-    for (const [key, value] of Object.entries(headers)) {
-      if (value !== null && value !== undefined) {
-        bufferedHeaders[key] = Buffer.isBuffer(value) ? value : Buffer.from(String(value));
-      }
-    }
-
-    return bufferedHeaders;
-  }
-
-  /**
-   * @param {string} type
-   * Generate unique sequence ID for messages
-   * @returns {string} Unique sequence ID
-   */
-  static generateSequenceId(type) {
-    return `${type ?? "SEQ"}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
   }
 
   /**
