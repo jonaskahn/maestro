@@ -1,0 +1,52 @@
+{
+  "name": "ecommerce-order-processing",
+  "version": "1.0.0",
+  "description": "E-commerce order processing example using Kafka + MongoDB with custom MessageService injection",
+  "main": "index.js",
+  "scripts": {
+    "db:init": "node scripts/db-manager.js init",
+    "db:reset": "node scripts/db-manager.js reset",
+    "db:generate": "node scripts/db-manager.js generate 20",
+    "db:stats": "node scripts/db-manager.js stats",
+    "db:init-with-data": "node scripts/db-manager.js init-with-data 50",
+    "db:clear": "node scripts/db-manager.js clear",
+    "db:drop": "node scripts/db-manager.js drop",
+    "producer": "export LOG_LEVEL=debug && nodemon run-producer.js",
+    "consumer": "export LOG_LEVEL=debug && nodemon run-consumer.js",
+    "test": "echo \"No tests specified\" && exit 0"
+  },
+  "keywords": [
+    "kafka",
+    "mongodb",
+    "ecommerce",
+    "message-queue",
+    "order-processing",
+    "clean-code",
+    "messageservice",
+    "cronjob"
+  ],
+  "author": "Jonas Kahn",
+  "license": "MIT",
+  "dependencies": {
+    "memcached": "^2.2.2",
+    "mongodb": "^6.3.0",
+    "node-cron": "^3.0.3",
+    "redis": "^4.6.11",
+    "dotenv": "^17.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.2"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jonaskahn/job-orchestrator",
+    "directory": "examples/ecommerce-order-processing"
+  },
+  "bugs": {
+    "url": "https://github.com/jonaskahn/job-orchestrator/issues"
+  },
+  "homepage": "https://github.com/jonaskahn/job-orchestrator#readme"
+}

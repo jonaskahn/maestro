@@ -1,0 +1,112 @@
+{
+  "name": "@jonaskahn/maestro",
+  "version": "0.0.4",
+  "description": "Job orchestration made simple for Node.js message workflows",
+  "main": "src/index.js",
+  "files": [
+    "src/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "prepack": "npm run code:check",
+    "prepublishOnly": "npm run code:check && npm test",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "code:check": "npm run lint && npm run format:check",
+    "code:fix": "npm run lint:fix && npm run format",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage",
+    "test:coverage:full": "jest --coverage --collectCoverageFrom='src/**/*.js'",
+    "test:coverage:report": "jest --coverage && open coverage/lcov-report/index.html",
+    "test:coverage:ci": "jest --coverage --ci --runInBand",
+    "test:coverage:badges": "jest --coverage --coverageReporters='json-summary' && node scripts/generate-coverage-badges.js",
+    "example": "cd examples/ecommerce-order-processing && npm start"
+  },
+  "keywords": [
+    "maestro",
+    "orchestrator",
+    "job-orchestration",
+    "nodejs",
+    "redis",
+    "memcached",
+    "kafka",
+    "rabbitmq",
+    "bullmq",
+    "job-queue",
+    "message-queue",
+    "producer-consumer",
+    "distributed-systems",
+    "microservices",
+    "concurrent-processing",
+    "workflow-orchestration"
+  ],
+  "author": {
+    "name": "Jonas Kahn",
+    "email": "me@ifelse.one",
+    "url": "https://github.com/jonaskahn"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jonaskahn/maestro.git"
+  },
+  "bugs": {
+    "url": "https://github.com/jonaskahn/maestro/issues"
+  },
+  "homepage": "https://github.com/jonaskahn/maestro#readme",
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "dependencies": {
+    "dotenv": "^17.0.1",
+    "winston": "^3.17.0"
+  },
+  "peerDependencies": {
+    "amqplib": ">=0.10.0",
+    "bullmq": ">=5.50.0",
+    "kafkajs": ">=2.2.0",
+    "memcached": ">=2.0.0",
+    "redis": ">=4.7.0"
+  },
+  "peerDependenciesMeta": {
+    "kafkajs": {
+      "optional": false
+    },
+    "redis": {
+      "optional": true
+    },
+    "memcached": {
+      "optional": true
+    },
+    "amqplib": {
+      "optional": true
+    },
+    "bullmq": {
+      "optional": true
+    }
+  },
+  "optionalDependencies": {
+    "amqplib": ">=0.10.0",
+    "bullmq": ">=5.50.0",
+    "kafkajs": ">=2.2.0",
+    "memcached": ">=2.0.0",
+    "redis": ">=4.7.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.30.1",
+    "eslint": "^9.30.1",
+    "eslint-config-prettier": "^10.1.5",
+    "jest": "^30.0.4",
+    "jest-environment-node": "^30.0.4",
+    "nodemon": "^3.1.10",
+    "prettier": "^3.6.2"
+  }
+}
