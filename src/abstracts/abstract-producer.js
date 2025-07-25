@@ -124,8 +124,6 @@ class AbstractProducer {
   #setupGracefulShutdown() {
     process.on("SIGINT", this.#handleGracefulShutdownProducer.bind(this, "SIGINT"));
     process.on("SIGTERM", this.#handleGracefulShutdownProducer.bind(this, "SIGTERM"));
-    process.on("uncaughtException", this.#handleGracefulShutdownProducer.bind(this, "uncaughtException"));
-    process.on("unhandledRejection", this.#handleGracefulShutdownProducer.bind(this, "unhandledRejection"));
   }
 
   async #handleGracefulShutdownProducer(signal = "unknown") {

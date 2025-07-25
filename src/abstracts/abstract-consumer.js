@@ -183,8 +183,6 @@ class AbstractConsumer {
   #setupGracefulShutdown() {
     process.on("SIGINT", this.#handleGracefulShutdownConsumer.bind(this, "SIGINT"));
     process.on("SIGTERM", this.#handleGracefulShutdownConsumer.bind(this, "SIGTERM"));
-    process.on("uncaughtException", this.#handleGracefulShutdownConsumer.bind(this, "uncaughtException"));
-    process.on("unhandledRejection", this.#handleGracefulShutdownConsumer.bind(this, "unhandledRejection"));
   }
 
   async #handleGracefulShutdownConsumer(signal = "unknown") {

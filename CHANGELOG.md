@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.0.5] - 2025-07-25
+
+- Remove unhandleReject/Exception event handler in Consumer and Producer
+
 ## [0.0.4] - 2025-07-24
 
 - Enhance timing lock

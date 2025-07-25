@@ -42,9 +42,11 @@ class TestProducer extends AbstractProducer {
     this.mockMonitorService = null;
     this.isShuttingDown = false;
   }
+
   getBrokerType() {
     return "test-broker";
   }
+
   _createCacheLayer(config) {
     if (!config || (!config.useSuppression && !config.useDistributedLock)) return null;
 
@@ -59,6 +61,7 @@ class TestProducer extends AbstractProducer {
 
     return this.mockCacheLayer;
   }
+
   _createMonitorService(config) {
     if (!config || !config.useMonitor) return null;
 
@@ -92,6 +95,7 @@ class TestProducer extends AbstractProducer {
     this.brokerConnected = false;
     return Promise.resolve(true);
   }
+
   getNextItems(criteria, limit, excludedIds) {
     if (this._isShuttingDown) {
       throw new Error(`${this.getBrokerType()} producer is shutting down`);
@@ -123,12 +127,15 @@ class TestProducer extends AbstractProducer {
 
     return items.filter(item => !excludedIds.includes(this.getItemId(item)));
   }
+
   getItemId(item) {
     return item.id;
   }
+
   getMessageType() {
     return "test-message";
   }
+
   _createBrokerMessages(items) {
     return items.map(item => ({
       key: this.getMessageKey(item),
@@ -147,11 +154,13 @@ class TestProducer extends AbstractProducer {
     this.sentMessages = [...this.sentMessages, ...messages];
     return Promise.resolve({ messageCount: messages.length });
   }
+
   _logConfigurationLoaded() {
     mockLogDebug(
       `${this.getBrokerType()?.toUpperCase()} Producer loaded with configuration ${JSON.stringify(this._config, null, 2)}`
     );
   }
+
   _getStatusConfig() {
     return {
       isConnected: this.brokerConnected,
@@ -161,10 +170,12 @@ class TestProducer extends AbstractProducer {
       sentMessagesCount: this.sentMessages.length,
     };
   }
+
   // We need to override these private methods for testing
   setShuttingDown(value) {
     this._isShuttingDown = value;
   }
+
   // Method to expose private method functionality for testing
   mockHandleGracefulShutdown(signal) {
     if (this._isShuttingDown) {
@@ -178,6 +189,7 @@ class TestProducer extends AbstractProducer {
       return this.disconnect();
     }
   }
+
   getMessageKey(item) {
     return item.id;
   }
@@ -860,8 +872,6 @@ describe("AbstractProducer", () => {
 
       expect(process.on).toHaveBeenCalledWith("SIGINT", expect.any(Function));
       expect(process.on).toHaveBeenCalledWith("SIGTERM", expect.any(Function));
-      expect(process.on).toHaveBeenCalledWith("uncaughtException", expect.any(Function));
-      expect(process.on).toHaveBeenCalledWith("unhandledRejection", expect.any(Function));
     });
 
     test("should handle graceful shutdown", async () => {
