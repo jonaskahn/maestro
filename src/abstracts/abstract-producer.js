@@ -40,6 +40,9 @@ class AbstractProducer {
   _enabledSuppression;
   _enabledDistributedLock;
 
+  _sigintHandler;
+  _sigtermHandler;
+
   /**
    * Creates a producer instance with configuration validation and initialization
    *
@@ -49,6 +52,7 @@ class AbstractProducer {
    * @param {boolean} [config.useDistributedLock] - Whether to enable distributed lock for coordination
    * @param {Object} [config.lockTtlMs] - TTL for distributed locks in milliseconds
    * @param {boolean} [config.includeItems] - Whether to include original items in result
+   * @param {boolean} [config.manageProcessSignals=true] - Register SIGINT/SIGTERM handlers on this instance
    */
   constructor(config) {
     this.#ensureNotDirectInstantiation();
@@ -122,8 +126,14 @@ class AbstractProducer {
   }
 
   #setupGracefulShutdown() {
-    process.on("SIGINT", this.#handleGracefulShutdownProducer.bind(this, "SIGINT"));
-    process.on("SIGTERM", this.#handleGracefulShutdownProducer.bind(this, "SIGTERM"));
+    if (this._config.manageProcessSignals === false) {
+      return;
+    }
+
+    this._sigintHandler = this.#handleGracefulShutdownProducer.bind(this, "SIGINT");
+    this._sigtermHandler = this.#handleGracefulShutdownProducer.bind(this, "SIGTERM");
+    process.on("SIGINT", this._sigintHandler);
+    process.on("SIGTERM", this._sigtermHandler);
   }
 
   async #handleGracefulShutdownProducer(signal = "unknown") {
@@ -155,10 +165,14 @@ class AbstractProducer {
   }
 
   #removeShutdownListeners() {
-    process.removeListener("SIGINT", this.#handleGracefulShutdownProducer);
-    process.removeListener("SIGTERM", this.#handleGracefulShutdownProducer);
-    process.removeListener("uncaughtException", this.#handleGracefulShutdownProducer);
-    process.removeListener("unhandledRejection", this.#handleGracefulShutdownProducer);
+    if (this._sigintHandler) {
+      process.removeListener("SIGINT", this._sigintHandler);
+      this._sigintHandler = null;
+    }
+    if (this._sigtermHandler) {
+      process.removeListener("SIGTERM", this._sigtermHandler);
+      this._sigtermHandler = null;
+    }
   }
 
   /**
@@ -222,7 +236,6 @@ class AbstractProducer {
       await this.#delayConnect();
       await this.performConnection();
       await this.#processAfterConnected();
-      await this._createTopicIfAllowed();
       this.#markAsConnected();
       logger.logInfo(`${this.getBrokerType()?.toUpperCase()} producer is connected to topic [ ${this._topic} ]`);
     } catch (error) {
@@ -387,24 +400,28 @@ class AbstractProducer {
    */
   async produce(criteria, limit, options = {}) {
     const successResult = this.#createEmptyResult(true);
-    const errorResult = this.#createEmptyResult(false);
     try {
       this.#ensureConnected();
-      if (await this._topicExisted) {
-        const isPressure = await this.#isMessageBrokerUnderPressure();
-        if (isPressure) {
-          logger.logWarning("System is under pressure, stop sending new items");
-          return successResult;
-        }
-        const result = await this.#processItems(criteria, limit, options);
-        this.#logProductionSuccess(result);
-        return result;
+      if (!this._topicExisted) {
+        logger.logWarning(`Topic ${this._topic} seems does not existed`);
+        return this.#createEmptyResult(false, "topic_not_available");
       }
-      logger.logWarning(`Topic ${this._topic} seems does not existed`);
-      return successResult;
+
+      const isPressure = await this.#isMessageBrokerUnderPressure();
+      if (isPressure) {
+        logger.logWarning("System is under pressure, stop sending new items");
+        return successResult;
+      }
+
+      const result = await this.#processItems(criteria, limit, options);
+      this.#logProductionSuccess(result);
+      return result;
     } catch (error) {
       logger.logError(`Failed to produce messages to ${this._topic} topic`, error);
-      return errorResult;
+      if (options.failOnLockTimeout) {
+        throw error;
+      }
+      return this.#createEmptyResult(false, "produce_error", error?.message ?? String(error));
     }
   }
 
@@ -418,20 +435,20 @@ class AbstractProducer {
     }
   }
 
-  #createEmptyResult(success) {
+  #createEmptyResult(success, reason = "no_items_found", errorMessage = null) {
     return {
       success,
       messageType: this.getMessageType(),
       total: 0,
       sent: 0,
       skipped: 0,
-      error: null,
+      error: errorMessage,
       itemIds: [],
       details: {
         topic: this._topic,
         brokerType: this.getBrokerType(),
         timestamp: Date.now(),
-        reason: "no_items_found",
+        reason,
       },
     };
   }
@@ -501,18 +518,32 @@ class AbstractProducer {
 
   async #sendItemToBrokerWithLock(criteria, limit, options = {}) {
     try {
+      if (options.ignoreLocksAndSend) {
+        return await this.#sendItemToBrokerWithoutLock(criteria, limit, options);
+      }
+
       const lockTime = (options?.lockTime || TtlConfig.getAllTtlValues().DISTRIBUTED_LOCK_TTL) * limit;
-      const lockAcquired = await this.#acquireLock(lockTime);
+      const lockAcquired = await this.#acquireLock(lockTime, options);
       if (!lockAcquired) {
+        if (options.failOnLockTimeout) {
+          throw new Error(`Failed to acquire lock for ${this.getBrokerType()} producer`);
+        }
+        if (options.skipOnLockTimeout) {
+          const items = await this.#getProcessingItems(criteria, limit);
+          return this._skipMessagesSending(items);
+        }
         return await this.#retryWithExponentialBackoff(criteria, limit, options);
       }
       return await this.#sendItemToBrokerWithoutLock(criteria, limit, options);
     } catch (e) {
+      if (options.failOnLockTimeout) {
+        throw e;
+      }
       logger.logWarning("Producer failed to send message to Broker", e);
       return {
         success: false,
         sent: 0,
-        skipped: -1,
+        skipped: 0,
         error: e,
         items: [],
         details: {
@@ -525,13 +556,14 @@ class AbstractProducer {
     }
   }
 
-  async #acquireLock(lockTtl) {
+  async #acquireLock(lockTtl, options = {}) {
     if (!this._distributedLockService) {
       return true;
     }
 
     try {
-      return await this._distributedLockService.acquire(lockTtl);
+      const maxWaitTime = options.lockWaitTime;
+      return await this._distributedLockService.acquire(lockTtl, maxWaitTime);
     } catch (error) {
       logger.logError(`Error acquiring lock for ${this.getBrokerType()} producer`, error);
       return false;
@@ -573,23 +605,27 @@ class AbstractProducer {
   async #sendItemToBrokerWithoutLock(criteria, limit, options = {}) {
     try {
       const items = await this.#getProcessingItems(criteria, limit);
-      const processingItems = this.#isSuppressionFullyEnabled() ? await this.#markItemAsSuppressed(items) : items;
       logger.logDebug(
-        `${this.getBrokerType()} consumer on topic ${this._topic} prepare ${processingItems.length} items from provided ${items.length} items. `
+        `${this.getBrokerType()} producer on topic ${this._topic} prepare ${items.length} items for send. `
       );
       let messages = [];
       let sendResult = [];
-      if (processingItems.length > 0) {
-        messages = this._createBrokerMessages(processingItems);
+      let sentItems = [];
+      if (items.length > 0) {
+        messages = this._createBrokerMessages(items);
         sendResult = await this._sendMessagesToBroker(messages, options);
+        sentItems = items;
+        if (this.#isSuppressionFullyEnabled()) {
+          sentItems = await this.#markItemsAsSuppressedAfterSend(items);
+        }
         logger.logDebug(`Successfully sent ${messages.length} messages to ${this.getBrokerType()} broker`);
       }
       return {
         success: true,
         sent: messages.length,
-        skipped: 0,
+        skipped: Math.max(0, items.length - sentItems.length),
         error: null,
-        items: processingItems,
+        items: sentItems,
         details: sendResult || {},
       };
     } catch (error) {
@@ -688,22 +724,23 @@ class AbstractProducer {
     return this._cacheLayer && this._enabledSuppression;
   }
 
-  async #markItemAsSuppressed(items) {
+  async #markItemsAsSuppressedAfterSend(items) {
     const result = [];
-    try {
-      if (!this._cacheLayer) {
-        return result;
-      }
-      for (const item of items) {
+    if (!this._cacheLayer) {
+      return result;
+    }
+
+    for (const item of items) {
+      try {
         if (await this._cacheLayer.markAsSuppressed(this.getItemId(item))) {
           result.push(item);
         }
+      } catch (error) {
+        logger.logError(
+          `Producer failed to mark item as suppressed after send; duplicates may appear until TTL expires.`,
+          error
+        );
       }
-    } catch (error) {
-      logger.logError(
-        `Producer failed to send suppressed messages, aware of duplication will be appeared faster than excepted.`,
-        error
-      );
     }
     return result;
   }

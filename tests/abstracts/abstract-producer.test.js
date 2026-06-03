@@ -294,6 +294,32 @@ describe("AbstractProducer", () => {
       await expect(producerInstance.disconnect()).rejects.toThrow(errorMsg);
       expect(mockLogError).toHaveBeenCalled();
     });
+
+    test("should call _createTopicIfAllowed only once during connect", async () => {
+      const createTopicSpy = jest.spyOn(producerInstance, "_createTopicIfAllowed");
+      await producerInstance.connect();
+      expect(createTopicSpy).toHaveBeenCalledTimes(1);
+      createTopicSpy.mockRestore();
+    });
+  });
+
+  describe("Topic Availability", () => {
+    test("should fail produce when topic does not exist", async () => {
+      class NoTopicProducer extends TestProducer {
+        async _createTopicIfAllowed() {
+          return false;
+        }
+      }
+
+      producerInstance = new NoTopicProducer(validConfig);
+      await producerInstance.connect();
+
+      const result = await producerInstance.produce({}, 3);
+      expect(result.success).toBe(false);
+      expect(result.sent).toBe(0);
+      expect(result.details.reason).toBe("topic_not_available");
+      expect(result.details.reason).not.toBe("no_items_found");
+    });
   });
 
   describe("Production Operations", () => {
@@ -325,13 +351,15 @@ describe("AbstractProducer", () => {
       expect(result.success).toBe(false);
       expect(result.total).toBe(0);
       expect(result.sent).toBe(0);
+      expect(result.error).toContain("not connected");
+      expect(result.details.reason).toBe("produce_error");
     });
 
     test("should handle failure in message sending", async () => {
       const result = await producerInstance.produce({ shouldFailSending: true }, 2);
       expect(result.success).toBe(false);
       expect(result.sent).toBe(0);
-      expect(result.skipped).toBe(-1);
+      expect(result.skipped).toBe(0);
       expect(result.error).toBe("Failed to send messages to broker");
       expect(result.details.reason).toBe("broker_send_error");
     });
@@ -340,7 +368,7 @@ describe("AbstractProducer", () => {
       const result = await producerInstance.produce({ shouldFail: true }, 3);
       expect(result.success).toBe(false);
       expect(result.sent).toBe(0);
-      expect(result.skipped).toBe(-1);
+      expect(result.skipped).toBe(0);
       expect(result.error).toBe("Failed to fetch items");
       expect(result.details.reason).toBe("broker_send_error");
     });
@@ -372,16 +400,16 @@ describe("AbstractProducer", () => {
     });
 
     test("should handle result as failed when shutting down", async () => {
-      // Create a special mock function for getNextItems that throws the right error
       const producer = new TestProducer(validConfig);
       await producer.connect();
 
-      // Set the shutting down flag
       producer.setShuttingDown(true);
 
       const result = await producer.produce({}, 2);
       expect(result.success).toBe(false);
       expect(result.total).toBe(0);
+      expect(result.error).toContain("shutting down");
+      expect(result.details.reason).toBe("produce_error");
     });
   });
 
@@ -625,19 +653,22 @@ describe("AbstractProducer", () => {
     });
 
     test("should handle suppression marking errors gracefully", async () => {
-      // Make the markAsSuppressed method throw an error
       producerInstance.mockCacheLayer.markAsSuppressed.mockRejectedValueOnce(new Error("Suppression marking failed"));
 
-      // Should still succeed despite the suppression error
       const result = await producerInstance.produce({}, 2);
       expect(result.success).toBe(true);
-      expect(result.sent).toBe(0);
+      expect(result.sent).toBe(2);
 
-      // Should log the error
       expect(mockLogError).toHaveBeenCalledWith(
-        expect.stringContaining("Producer failed to send suppressed messages"),
+        expect.stringContaining("Producer failed to mark item as suppressed after send"),
         expect.any(Error)
       );
+    });
+
+    test("should not mark items as suppressed when broker send fails", async () => {
+      const result = await producerInstance.produce({ shouldFailSending: true }, 2);
+      expect(result.success).toBe(false);
+      expect(producerInstance.mockCacheLayer.markAsSuppressed).not.toHaveBeenCalled();
     });
 
     test("should exclude both processing and suppressed items", async () => {
@@ -691,7 +722,7 @@ describe("AbstractProducer", () => {
 
       expect(result.success).toBe(false);
       expect(result.sent).toBe(0);
-      expect(result.skipped).toBe(-1);
+      expect(result.skipped).toBe(0);
       expect(result.itemIds).toEqual([]);
       expect(result.total).toBe(0);
       expect(result.error).toBe("Failed to send messages to broker");
@@ -714,7 +745,6 @@ describe("AbstractProducer", () => {
     });
 
     test("should handle lock acquisition failure with skipOnLockTimeout", async () => {
-      // Override the mock implementation for this test
       mockAcquire.mockResolvedValueOnce(false);
 
       producerInstance = new TestProducer(validConfig);
@@ -722,14 +752,13 @@ describe("AbstractProducer", () => {
 
       const result = await producerInstance.produce({}, 3, { skipOnLockTimeout: true });
       expect(result.success).toBe(true);
-      expect(result.sent).toBe(3);
-      expect(result.skipped).toBe(0);
-      // Lock timeout reason not actually set in the implementation
-      expect(result.details.reason).not.toBe("lock_timeout");
+      expect(result.sent).toBe(0);
+      expect(result.skipped).toBe(3);
+      expect(result.details.reason).toBe("lock_timeout");
+      expect(mockAcquire).toHaveBeenCalled();
     });
 
     test("should handle lock acquisition failure with ignoreLocksAndSend", async () => {
-      // Override the mock implementation for this test
       mockAcquire.mockResolvedValueOnce(false);
 
       producerInstance = new TestProducer(validConfig);
@@ -739,28 +768,27 @@ describe("AbstractProducer", () => {
       expect(result.success).toBe(true);
       expect(result.sent).toBe(3);
       expect(result.skipped).toBe(0);
+      expect(mockAcquire).not.toHaveBeenCalled();
     });
 
     test("should handle lock acquisition failure with failOnLockTimeout", async () => {
-      // Create a mock implementation that throws an error when failOnLockTimeout is true
-      const mockError = new Error("Failed to acquire lock for test-broker producer");
+      mockAcquire.mockResolvedValue(false);
 
       producerInstance = new TestProducer(validConfig);
-
-      // Override the #handleLockAcquisitionFailure method to throw the expected error
-      const originalProduce = producerInstance.produce;
-      producerInstance.produce = jest.fn().mockImplementation((criteria, limit, options) => {
-        if (options?.failOnLockTimeout) {
-          return Promise.reject(mockError);
-        }
-        return originalProduce.call(producerInstance, criteria, limit, options);
-      });
-
       await producerInstance.connect();
 
       await expect(producerInstance.produce({}, 3, { failOnLockTimeout: true })).rejects.toThrow(
         "Failed to acquire lock for test-broker producer"
       );
+    });
+
+    test("should pass lockWaitTime to distributed lock acquire", async () => {
+      producerInstance = new TestProducer(validConfig);
+      await producerInstance.connect();
+
+      await producerInstance.produce({}, 2, { lockWaitTime: 5000 });
+
+      expect(mockAcquire).toHaveBeenCalledWith(expect.any(Number), 5000);
     });
 
     test("should retry on lock acquisition error with exponential backoff", async () => {
@@ -911,33 +939,38 @@ describe("AbstractProducer", () => {
     });
 
     test("should handle graceful shutdown", async () => {
-      // Create a producer that we can call the shutdown handler on
-      const realProcessOn = originalProcessOn;
-
-      // Setup the handler capture
-      let shutdownHandler = null;
+      let registeredSigintHandler = null;
       process.on = jest.fn((signal, handler) => {
         if (signal === "SIGINT") {
-          shutdownHandler = handler;
+          registeredSigintHandler = handler;
         }
       });
 
-      // Create producer instance which will set up the handlers
       producerInstance = new TestProducer(validConfig);
       await producerInstance.connect();
 
-      // Test the handler if we captured it
-      if (shutdownHandler) {
-        // Mock process.removeListener for cleanup assertions
+      expect(registeredSigintHandler).toBe(producerInstance._sigintHandler);
+
+      if (registeredSigintHandler) {
         process.removeListener = jest.fn();
 
-        // Call the shutdown handler
-        await shutdownHandler("SIGINT");
+        await registeredSigintHandler("SIGINT");
 
-        expect(process.removeListener).toHaveBeenCalled();
+        expect(process.removeListener).toHaveBeenCalledWith("SIGINT", registeredSigintHandler);
         expect(producerInstance.brokerConnected).toBe(false);
         expect(process.exit).toHaveBeenCalledWith(0);
       }
+    });
+
+    test("should not register signal handlers when manageProcessSignals is false", () => {
+      producerInstance = new TestProducer({
+        ...validConfig,
+        manageProcessSignals: false,
+      });
+
+      expect(process.on).not.toHaveBeenCalled();
+      expect(producerInstance._sigintHandler).toBeUndefined();
+      expect(producerInstance._sigtermHandler).toBeUndefined();
     });
   });
 });
