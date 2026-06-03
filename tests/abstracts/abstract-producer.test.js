@@ -331,14 +331,18 @@ describe("AbstractProducer", () => {
       const result = await producerInstance.produce({ shouldFailSending: true }, 2);
       expect(result.success).toBe(false);
       expect(result.sent).toBe(0);
-      expect(result.skipped).toBe(0);
+      expect(result.skipped).toBe(-1);
+      expect(result.error).toBe("Failed to send messages to broker");
+      expect(result.details.reason).toBe("broker_send_error");
     });
 
     test("should handle failure in fetching items", async () => {
       const result = await producerInstance.produce({ shouldFail: true }, 3);
       expect(result.success).toBe(false);
       expect(result.sent).toBe(0);
-      expect(result.skipped).toBe(0);
+      expect(result.skipped).toBe(-1);
+      expect(result.error).toBe("Failed to fetch items");
+      expect(result.details.reason).toBe("broker_send_error");
     });
 
     test("should throw error when validating items", async () => {
@@ -677,6 +681,22 @@ describe("AbstractProducer", () => {
 
       const status = producerInstance.getStatus();
       expect(status.lock.enabled).toBe(true);
+    });
+
+    test("should return locked send failure without masking error when broker send fails", async () => {
+      producerInstance = new TestProducer(validConfig);
+      await producerInstance.connect();
+
+      const result = await producerInstance.produce({ shouldFailSending: true }, 2);
+
+      expect(result.success).toBe(false);
+      expect(result.sent).toBe(0);
+      expect(result.skipped).toBe(-1);
+      expect(result.itemIds).toEqual([]);
+      expect(result.total).toBe(0);
+      expect(result.error).toBe("Failed to send messages to broker");
+      expect(result.error).not.toMatch(/Cannot read properties of undefined/);
+      expect(result.details.reason).toBe("broker_send_error");
     });
 
     test("should work without distributed lock", async () => {

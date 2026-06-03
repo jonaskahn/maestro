@@ -514,6 +514,7 @@ class AbstractProducer {
         sent: 0,
         skipped: -1,
         error: e,
+        items: [],
         details: {
           reason: "broker_send_error",
           errorMessage: e.message,
@@ -708,14 +709,15 @@ class AbstractProducer {
   }
 
   #buildProcessingResult(sendResult) {
-    const { success, sent, skipped, error, items, details } = sendResult;
+    const { success, sent, skipped, error, items: rawItems, details } = sendResult;
+    const items = rawItems ?? [];
 
     const itemIds = items.map(item => this.getItemId(item));
 
     return {
       success,
       messageType: this.getMessageType(),
-      total: items?.length,
+      total: items.length,
       sent,
       skipped,
       error: error ? error.message : null,
