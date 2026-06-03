@@ -220,8 +220,27 @@ describe("KafkaProducer", () => {
         groupId: "test-group",
         lagThreshold: 1000,
         checkInterval: 60000,
+        stopProducerOnLag: false,
         clientOptions: { clientId: "test-client" },
       });
+    });
+
+    test("should pass stopProducerOnLag when configured", () => {
+      const config = {
+        topic: "test-topic",
+        groupId: "test-group",
+        stopProducerOnLag: true,
+        clientOptions: { clientId: "test-client" },
+      };
+
+      const createMonitorService = KafkaProducer.prototype._createMonitorService;
+      createMonitorService.call({}, config);
+
+      expect(KafkaMonitorService).toHaveBeenCalledWith(
+        expect.objectContaining({
+          stopProducerOnLag: true,
+        })
+      );
     });
   });
 

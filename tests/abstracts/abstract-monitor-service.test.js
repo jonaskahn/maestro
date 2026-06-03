@@ -95,6 +95,7 @@ describe("AbstractMonitorService", () => {
       expect(service.config).toBeDefined();
       expect(service.config.lagThreshold).toBe(100);
       expect(service.config.enabledResourceLag).toBe(false);
+      expect(service.config.stopProducerOnLag).toBe(false);
       expect(service.config.checkInterval).toBe(15000);
       expect(service.config.rateLimitThreshold).toBe(100);
       expect(service._topic).toBe("minimal-topic");
@@ -156,6 +157,35 @@ describe("AbstractMonitorService", () => {
       process.env.SECOND_VAR = "456";
       const result = monitorService.getEnvironmentValueOrDefault(["FIRST_VAR", "SECOND_VAR"], 42);
       expect(result).toBe(456);
+    });
+  });
+
+  describe("getBooleanEnvironmentValueOrDefault", () => {
+    const originalEnv = process.env;
+
+    beforeEach(() => {
+      process.env = { ...originalEnv };
+    });
+
+    afterEach(() => {
+      process.env = originalEnv;
+    });
+
+    test("Given unset environment variables When getBooleanEnvironmentValueOrDefault called Then should return default value", () => {
+      const result = monitorService.getBooleanEnvironmentValueOrDefault(["TEST_BOOL_VAR"], false);
+      expect(result).toBe(false);
+    });
+
+    test("Given environment variable true When getBooleanEnvironmentValueOrDefault called Then should return true", () => {
+      process.env.TEST_BOOL_VAR = "true";
+      const result = monitorService.getBooleanEnvironmentValueOrDefault(["TEST_BOOL_VAR"], false);
+      expect(result).toBe(true);
+    });
+
+    test("Given MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG When monitor constructed Then should enable stopProducerOnLag", () => {
+      process.env.MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG = "true";
+      const service = new TestMonitorService({ topic: "env-topic" });
+      expect(service.config.stopProducerOnLag).toBe(true);
     });
   });
 
@@ -374,6 +404,20 @@ describe("AbstractMonitorService", () => {
   });
 
   describe("shouldPauseProcessing", () => {
+    test("Given HIGH lag and stopProducerOnLag disabled When shouldPauseProcessing called Then should return false", async () => {
+      monitorService.config.stopProducerOnLag = false;
+      monitorService.setMockLagMetrics(90);
+
+      expect(await monitorService.shouldPauseProcessing()).toBe(false);
+    });
+
+    test("Given CRITICAL lag and stopProducerOnLag enabled When shouldPauseProcessing called Then should return true", async () => {
+      monitorService.config.stopProducerOnLag = true;
+      monitorService.setMockLagMetrics(150);
+
+      expect(await monitorService.shouldPauseProcessing()).toBe(true);
+    });
+
     test("Given HIGH or CRITICAL backpressure When shouldPauseProcessing called Then should return true", async () => {
       jest.spyOn(monitorService, "getBackpressureStatus").mockResolvedValueOnce({
         backpressureLevel: "HIGH",

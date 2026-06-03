@@ -388,7 +388,23 @@ describe("AbstractProducer", () => {
       mockLogWarning.mockClear(); // Clear previous calls
     });
 
-    test("should respect backpressure when detected", async () => {
+    test("should continue producing when backpressure is warning only", async () => {
+      const monitorService = producerInstance.getBackpressureMonitor();
+      monitorService.shouldPauseProcessing.mockResolvedValue(false);
+      monitorService.getBackpressureStatus.mockResolvedValue({
+        backpressureLevel: "HIGH",
+        shouldPause: false,
+        recommendedDelay: 0,
+        metrics: { lag: { total: 150, threshold: 100 } },
+      });
+
+      const result = await producerInstance.produce({}, 3);
+      expect(result.success).toBe(true);
+      expect(result.sent).toBe(3);
+      expect(mockLogWarning).not.toHaveBeenCalledWith(expect.stringContaining("System is under pressure"));
+    });
+
+    test("should stop producing when stop on lag is enabled and backpressure detected", async () => {
       const monitorService = producerInstance.getBackpressureMonitor();
       monitorService.shouldPauseProcessing.mockResolvedValue(true);
       monitorService.getBackpressureStatus.mockResolvedValue({

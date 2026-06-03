@@ -17,6 +17,7 @@ const TtlConfig = require("../config/ttl-config");
 const DEFAULT_VALUES = {
   MAX_LAG_THRESHOLD: 100,
   ENABLED_RESOURCE_LAG: false,
+  STOP_PRODUCER_ON_LAG: false,
   RATE_LIMIT_THRESHOLD: 100,
   EXPONENTIAL_FACTOR: 2,
 };
@@ -41,6 +42,7 @@ const BACKPRESSURE_LEVELS = {
 const ENV_KEYS = {
   MAX_LAG: ["MO_BACKPRESSURE_MAX_LAG"],
   ENABLED_RESOURCE_LAG: ["MO_BACKPRESSURE_ENABLED_RESOURCE_LAG"],
+  STOP_PRODUCER_ON_LAG: ["MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG"],
 };
 
 /**
@@ -63,6 +65,7 @@ class AbstractMonitorService {
    * @param {number} [config.initialDelay] - Initial delay for backoff in ms
    * @param {number} [config.maxDelay] - Maximum delay for backoff in ms
    * @param {number} [config.exponentialFactor] - Factor for exponential backoff
+   * @param {boolean} [config.stopProducerOnLag] - Whether HIGH/CRITICAL lag should pause producer sends
    */
   constructor(config) {
     if (this.constructor === AbstractMonitorService) {
@@ -85,6 +88,9 @@ class AbstractMonitorService {
       initialDelay: config.initialDelay || TtlConfig.getAllTtlValues().BACKOFF_MIN_DELAY,
       maxDelay: config.maxDelay || TtlConfig.getAllTtlValues().BACKOFF_MAX_DELAY,
       exponentialFactor: config.exponentialFactor || DEFAULT_VALUES.EXPONENTIAL_FACTOR,
+      stopProducerOnLag:
+        config.stopProducerOnLag ??
+        this.getBooleanEnvironmentValueOrDefault(ENV_KEYS.STOP_PRODUCER_ON_LAG, DEFAULT_VALUES.STOP_PRODUCER_ON_LAG),
     };
     this._topic = config.topic;
     this.isMonitoring = MONITORING_STATES.DISABLED;
@@ -97,6 +103,7 @@ class AbstractMonitorService {
         lagThreshold: this.config.lagThreshold,
         checkInterval: this.config.lagMonitorInterval,
         rateLimitThreshold: this.config.rateLimitThreshold,
+        stopProducerOnLag: this.config.stopProducerOnLag,
       }
     );
   }
@@ -361,8 +368,9 @@ class AbstractMonitorService {
     try {
       const metrics = await this.collectCurrentMetrics();
       const backpressureLevel = this.calculateBackpressureLevel(metrics);
-      const shouldPause =
+      const wouldPauseForLevel =
         backpressureLevel === BACKPRESSURE_LEVELS.CRITICAL || backpressureLevel === BACKPRESSURE_LEVELS.HIGH;
+      const shouldPause = this.config.stopProducerOnLag && wouldPauseForLevel;
 
       const delayMultipliers = {
         [BACKPRESSURE_LEVELS.NONE]: 0,
@@ -439,6 +447,22 @@ class AbstractMonitorService {
       const value = process.env[key];
       if (value !== undefined) {
         return parseInt(value);
+      }
+    }
+    return defaultValue;
+  }
+
+  /**
+   * Gets boolean environment value with fallback to default
+   * @param {Array<string>} keys - Environment variable keys to check
+   * @param {boolean} defaultValue - Default value if no environment variable found
+   * @returns {boolean} Environment value or default
+   */
+  getBooleanEnvironmentValueOrDefault(keys, defaultValue) {
+    for (const key of keys) {
+      const value = process.env[key];
+      if (value !== undefined) {
+        return value === "true";
       }
     }
     return defaultValue;

@@ -225,12 +225,13 @@ After standardization, the configurations become:
 
 ## Monitor Service Configuration
 
-| Environment Variable                | Default                    | Required | Description                                        | Constructor Equivalent                    |
-| ----------------------------------- | -------------------------- | -------- | -------------------------------------------------- | ----------------------------------------- |
-| `MO_BACKPRESSURE_CHECK_INTERVAL_MS` | Network timeout \* 3       | No       | Interval for checking backpressure in milliseconds | Not directly configurable via constructor |
-| `MO_BACKPRESSURE_CACHE_TTL_MS`      | Network timeout \* 3 \* 20 | No       | TTL for backpressure cache in milliseconds         | Not directly configurable via constructor |
-| `MO_BACKOFF_MIN_DELAY_MS`           | Retry interval \* 3        | No       | Minimum backoff delay in milliseconds              | Not directly configurable via constructor |
-| `MO_BACKOFF_MAX_DELAY_MS`           | Retry interval \* 6        | No       | Maximum backoff delay in milliseconds              | Not directly configurable via constructor |
+| Environment Variable                   | Default                    | Required | Description                                                                                     | Constructor Equivalent                                  |
+| -------------------------------------- | -------------------------- | -------- | ----------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `MO_BACKPRESSURE_CHECK_INTERVAL_MS`    | Network timeout \* 3       | No       | Interval for checking backpressure in milliseconds                                              | Not directly configurable via constructor               |
+| `MO_BACKPRESSURE_CACHE_TTL_MS`         | Network timeout \* 3 \* 20 | No       | TTL for backpressure cache in milliseconds                                                      | Not directly configurable via constructor               |
+| `MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG` | `false`                    | No       | When `true`, HIGH/CRITICAL consumer lag pauses producer sends; when `false`, logs warnings only | `stopProducerOnLag` or `topicOptions.stopProducerOnLag` |
+| `MO_BACKOFF_MIN_DELAY_MS`              | Retry interval \* 3        | No       | Minimum backoff delay in milliseconds                                                           | Not directly configurable via constructor               |
+| `MO_BACKOFF_MAX_DELAY_MS`              | Retry interval \* 6        | No       | Maximum backoff delay in milliseconds                                                           | Not directly configurable via constructor               |
 
 ## Base Configuration Values
 

@@ -285,8 +285,24 @@ describe("KafkaManager", () => {
       expect(producerConfig.useSuppression).toBe(true);
       expect(producerConfig.useDistributedLock).toBe(true);
       expect(producerConfig.lagThreshold).toBe(5000);
+      expect(producerConfig.stopProducerOnLag).toBe(false);
       expect(producerConfig.producerOptions.idempotent).toBe(true);
       expect(producerConfig.producerOptions.compression).toBeDefined();
+    });
+
+    test("should set stopProducerOnLag from environment variable", () => {
+      const original = process.env.MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG;
+      process.env.MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG = "true";
+      try {
+        const config = KafkaManager.standardizeConfig({ topic: "test-topic" }, "producer");
+        expect(config.stopProducerOnLag).toBe(true);
+      } finally {
+        if (original === undefined) {
+          delete process.env.MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG;
+        } else {
+          process.env.MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG = original;
+        }
+      }
     });
   });
 

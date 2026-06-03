@@ -69,6 +69,7 @@ class KafkaProducer extends AbstractProducer {
    * @param {boolean} [config.useDistributedLock=true] - Whether to use distributed lock for coordination
    * @param {number} [config.lagThreshold=100] - Consumer lag threshold for backpressure monitoring
    * @param {number} [config.lagMonitorInterval=5000] - Interval for checking consumer lag in ms
+   * @param {boolean} [config.stopProducerOnLag=false] - Whether HIGH/CRITICAL lag pauses producer sends
    * @param {Object} [config.cacheOptions] - Cache configuration for deduplication
    */
   constructor(config = {}) {
@@ -138,6 +139,7 @@ class KafkaProducer extends AbstractProducer {
       groupId: config.groupId,
       lagThreshold: config.lagThreshold || 1_000,
       checkInterval: config.lagMonitorInterval || 60_000,
+      stopProducerOnLag: config.stopProducerOnLag ?? false,
       clientOptions: config.clientOptions,
     });
   }

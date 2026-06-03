@@ -400,6 +400,10 @@ class KafkaManager {
         topicOptions?.lagMonitorInterval ||
         parseInt(process.env.MO_KAFKA_PRODUCER_LAG_INTERVAL) ||
         5000;
+      standardizeConfig.stopProducerOnLag =
+        userConfig?.stopProducerOnLag ??
+        topicOptions?.stopProducerOnLag ??
+        process.env.MO_BACKPRESSURE_STOP_PRODUCER_ON_LAG === "true";
       standardizeConfig.useSuppression =
         userConfig?.useSuppression ?? process.env.MO_KAFKA_PRODUCER_USE_SUPPRESSION !== "false";
       standardizeConfig.useDistributedLock =
