@@ -73,7 +73,6 @@ describe("RedisCacheClient", () => {
         expect.objectContaining({
           url: "redis://test-host:6379",
           password: "test-password",
-          retry_strategy: expect.any(Function),
           socket: expect.objectContaining({
             reconnectStrategy: expect.any(Function),
           }),
@@ -105,7 +104,7 @@ describe("RedisCacheClient", () => {
       const envVars = { ...originalEnv };
       delete envVars.MO_REDIS_URL;
       delete envVars.MO_REDIS_PASSWORD;
-      envVars.REDIS_URL = "localhost:6379";
+      delete envVars.REDIS_URL;
       process.env = envVars;
 
       redis.createClient.mockClear();
@@ -128,29 +127,11 @@ describe("RedisCacheClient", () => {
   });
 
   describe("Retry and Reconnection Strategies", () => {
-    let retryStrategy;
     let reconnectStrategy;
 
     beforeEach(() => {
       const clientConfig = redis.createClient.mock.calls[0][0];
-      retryStrategy = clientConfig.retry_strategy;
       reconnectStrategy = clientConfig.socket.reconnectStrategy;
-    });
-
-    test("Given The retry strategy function created by the RedisCacheClient When The retry strategy is called with different retry attempts Then It should return delays with exponential backoff", () => {
-      const delay1 = retryStrategy(1);
-      const delay3 = retryStrategy(3);
-
-      expect(delay1).toBe(1000);
-      expect(delay3).toBe(3000);
-      expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("Redis retry attempt"));
-    });
-
-    test("Given The retry strategy function created by the RedisCacheClient When The retry strategy is called with attempts exceeding the maximum Then It should return null to stop retrying and log an error", () => {
-      const result = retryStrategy(6);
-
-      expect(result).toBeNull();
-      expect(mockLogError).toHaveBeenCalledWith(expect.stringContaining("Redis retry limit exceeded"));
     });
 
     test("Given The reconnection strategy function created by the RedisCacheClient When The reconnection strategy is called with different retry attempts Then It should return delays with exponential backoff", () => {
@@ -162,15 +143,15 @@ describe("RedisCacheClient", () => {
       expect(mockLogInfo).toHaveBeenCalledWith(expect.stringContaining("Redis reconnecting"));
     });
 
-    test("Given The reconnection strategy function created by the RedisCacheClient When The reconnection strategy is called with attempts exceeding the maximum Then It should return an error to indicate permanent failure", () => {
+    test("Given The reconnection strategy function created by the RedisCacheClient When The reconnection strategy is called with attempts exceeding the warning threshold Then It should log a warning and keep retrying", () => {
       const result = reconnectStrategy(6);
 
-      expect(result).toBeInstanceOf(Error);
-      expect(result.message).toBe("Redis connection failed permanently");
-      expect(mockLogError).toHaveBeenCalledWith(expect.stringContaining("Redis reconnection limit exceeded"));
+      expect(typeof result).toBe("number");
+      expect(result).toBeGreaterThan(0);
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Redis reconnect attempt"));
     });
 
-    test("Given the component When respecting environment variables for retry configuration Then it should succeed", () => {
+    test("Given the component When respecting environment variables for reconnection configuration Then it should succeed", () => {
       process.env = {
         ...originalEnv,
         MO_REDIS_MAX_RETRY_ATTEMPTS: "3",
@@ -182,10 +163,11 @@ describe("RedisCacheClient", () => {
       redis.createClient.mockClear();
       new RedisCacheClient({ keyPrefix: "env-prefix:" });
       const clientConfig = redis.createClient.mock.calls[0][0];
-      const envRetryStrategy = clientConfig.retry_strategy;
+      const envReconnectStrategy = clientConfig.socket.reconnectStrategy;
 
-      expect(envRetryStrategy(3)).toBe(1500);
-      expect(envRetryStrategy(5)).toBeNull();
+      expect(envReconnectStrategy(2)).toBe(1000);
+      expect(envReconnectStrategy(4)).toBe(2000);
+      expect(mockLogWarning).toHaveBeenCalledWith(expect.stringContaining("Redis reconnect attempt"));
     });
   });
 
