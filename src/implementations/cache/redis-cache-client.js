@@ -46,16 +46,15 @@ class RedisCacheClient extends AbstractCache {
    */
   #createRedisClient() {
     const connectionOptions = this.config.connectionOptions || {};
-    let redisUrl = "redis://localhost:6379";
+    let redisUrl;
     if (process.env.MO_REDIS_URL) {
-      redisUrl = `redis://${process.env.REDIS_URL.trim().replace("redis://")}`;
+      redisUrl = `redis://${process.env.REDIS_URL.trim().replace("redis://", "")}`;
     } else {
       redisUrl = `redis://${process.env.MO_REDIS_HOST?.trim() || "127.0.0.1"}:${process.env.MO_REDIS_PORT || 6379}`;
     }
     const clientConfig = {
-      url: connectionOptions.url || process.env.MO_REDIS_URL || redisUrl,
+      url: connectionOptions.url || process.env.MO_REDIS_URL || process.env.REDIS_URL || redisUrl,
       password: connectionOptions.password || process.env.MO_REDIS_PASSWORD,
-      retry_strategy: this.#createRetryStrategy(),
       socket: {
         reconnectStrategy: this.#createReconnectionStrategy(),
       },
@@ -69,54 +68,36 @@ class RedisCacheClient extends AbstractCache {
   }
 
   /**
-   * Creates retry strategy for Redis client
-   * @returns {Function} Retry strategy callback
-   */
-  #createRetryStrategy() {
-    const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
-    const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
-    const maxDelayMs = parseInt(process.env.MO_REDIS_MAX_DELAY_MS) || 30000;
-
-    return attemptNumber => {
-      if (attemptNumber > maxRetryAttempts) {
-        logger.logError(`Redis retry limit exceeded (${attemptNumber} attempts)`);
-        return null;
-      }
-
-      const delayMs = Math.min(attemptNumber * retryDelayMs, maxDelayMs);
-      logger.logInfo(`Redis retry attempt ${attemptNumber} in ${delayMs}ms`);
-      return delayMs;
-    };
-  }
-
-  /**
-   * Creates reconnection strategy for Redis socket
+   * Creates reconnection strategy for Redis socket.
+   * Retries indefinitely with capped exponential backoff so a brief Redis
+   * outage never permanently closes the client.
    * @returns {Function} Reconnection strategy callback
    */
   #createReconnectionStrategy() {
-    const maxRetryAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
     const retryDelayMs = parseInt(process.env.MO_REDIS_DELAY_MS) || 1000;
     const maxDelayMs = parseInt(process.env.MO_REDIS_MAX_DELAY_MS) || 30000;
+    const warnAfterAttempts = parseInt(process.env.MO_REDIS_MAX_RETRY_ATTEMPTS) || 5;
 
     return retryAttemptNumber => {
-      if (retryAttemptNumber > maxRetryAttempts) {
-        logger.logError(`Redis reconnection limit exceeded (${retryAttemptNumber} attempts)`);
-        return new Error("Redis connection failed permanently");
-      }
-
       const delayMs = Math.min(retryAttemptNumber * retryDelayMs, maxDelayMs);
-      logger.logInfo(`Redis reconnecting in ${delayMs}ms (attempt ${retryAttemptNumber})`);
+      if (retryAttemptNumber >= warnAfterAttempts) {
+        logger.logWarning(`Redis reconnect attempt ${retryAttemptNumber}, next retry in ${delayMs}ms`);
+      } else {
+        logger.logInfo(`Redis reconnecting in ${delayMs}ms (attempt ${retryAttemptNumber})`);
+      }
       return delayMs;
     };
   }
 
   /**
-   * Attaches event handlers to Redis client
+   * Attaches event handlers to Redis client.
+   * Updates _isConnected so AbstractCache.ensureConnected() reflects real state.
    * @param {Object} client - Redis client instance
    */
   #attachEventHandlers(client) {
     client.on("error", error => {
       logger.logError("Redis client error occurred", error);
+      this._isConnected = false;
     });
 
     client.on("connect", () => {
@@ -125,14 +106,17 @@ class RedisCacheClient extends AbstractCache {
 
     client.on("ready", () => {
       logger.logConnectionEvent("Redis", "client ready for operations");
+      this._isConnected = true;
     });
 
     client.on("end", () => {
       logger.logConnectionEvent("Redis", "client disconnected from server");
+      this._isConnected = false;
     });
 
     client.on("reconnecting", () => {
       logger.logConnectionEvent("Redis", "client reconnecting to server");
+      this._isConnected = false;
     });
   }
 

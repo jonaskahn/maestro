@@ -1,6 +1,6 @@
 {
   "name": "@jonaskahn/maestro",
-  "version": "0.0.6",
+  "version": "0.0.7",
   "description": "Job orchestration made simple for Node.js message workflows",
   "main": "src/index.js",
   "files": [
